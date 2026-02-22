@@ -1,0 +1,18 @@
+local CONFIGURATION = {
+    api_key  = "YOUR_API_KEY_HERE",
+    provider = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    model    = "models/gemini-2.5-flash",
+
+    -- ── Anki integration ────────────────────────────────────────────────────
+    -- Requires AnkiConnect add-on running on your Mac.
+    -- Use your Mac's LAN IP — not "localhost".
+    -- Note type MUST be "English" (the anki-card-generator note type).
+    anki = {
+        url   = "http://192.168.0.62:8765",  -- ← set your Mac's LAN IP
+        deck  = "English::Koreader",
+        model = "English",
+        tags  = { "KOReader" },
+    },
+}
+
+return CONFIGURATION
