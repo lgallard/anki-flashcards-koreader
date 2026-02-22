@@ -5,6 +5,7 @@
 
 local Device         = require("device")
 local InputContainer = require("ui/widget/container/inputcontainer")
+local NetworkMgr     = require("ui/network/manager")
 local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
 local _              = require("gettext")
@@ -105,6 +106,14 @@ function AnkiFlashcards:init()
                 end
 
                 ui.highlight:onClose()
+
+                if not NetworkMgr:isOnline() then
+                    UIManager:show(Notification:new {
+                        text    = _("No internet connection. Connect to WiFi first."),
+                        timeout = 4,
+                    })
+                    return
+                end
 
                 -- Show a loading notification while the AI call runs.
                 local loading = Notification:new {
