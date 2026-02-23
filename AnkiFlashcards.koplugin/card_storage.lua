@@ -52,6 +52,7 @@ function CardStorage.save_card(card)
         source      = card.source      or "",
         book_title  = card.book_title  or "",
         book_author = card.book_author or "",
+        image_path  = card.image_path  or "",
         date        = os.date("%Y-%m-%d"),
         sent_to_anki = false,
     })
@@ -64,15 +65,39 @@ function CardStorage.load_cards()
     return load_raw()
 end
 
--- Remove card by 1-based index.
+-- Update image_path on an already-saved card (called after async generation).
+function CardStorage.update_image_path(phrase, path)
+    local key     = normalize(phrase)
+    local entries = load_raw()
+    for _, e in ipairs(entries) do
+        if normalize(e.phrase) == key then
+            e.image_path = path
+            save_raw(entries)
+            return true
+        end
+    end
+    return false
+end
+
+-- Remove card by 1-based index; also deletes its image file if present.
 function CardStorage.delete_card(idx)
     local entries = load_raw()
+    local card    = entries[idx]
+    if card and card.image_path and card.image_path ~= "" then
+        os.remove(card.image_path)
+    end
     table.remove(entries, idx)
     save_raw(entries)
 end
 
--- Empty the entire card list.
+-- Empty the entire card list and delete all associated image files.
 function CardStorage.clear_all()
+    local entries = load_raw()
+    for _, card in ipairs(entries) do
+        if card.image_path and card.image_path ~= "" then
+            os.remove(card.image_path)
+        end
+    end
     save_raw({})
 end
 

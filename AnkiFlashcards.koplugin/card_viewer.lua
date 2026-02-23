@@ -207,9 +207,26 @@ function CardViewer:init()
     local content_widget
 
     if not self.show_back then
-        -- ── FRONT: centred phrase + IPA in larger font ────────────────────────
+        -- ── FRONT: optional image + centred phrase + IPA ──────────────────────
+        local image_path = self.card and self.card.image_path
+        local image_h    = 0
+        local img_widget = nil
+
+        if image_path and image_path ~= "" then
+            image_h = math.floor(inner_w * 9 / 16)
+            img_widget = ImageWidget:new {
+                file         = image_path,
+                width        = inner_w,
+                height       = image_h,
+                scale_factor = 0,
+            }
+        end
+
         local front_face = Font:getFace("smallinfofont")
-        local scroll_h   = total_content_h - 2 * self.text_padding - 2 * self.text_margin
+        local gap        = img_widget and Size.padding.default or 0
+        local scroll_h   = total_content_h
+                         - 2 * self.text_padding - 2 * self.text_margin
+                         - image_h - gap
         self.scroll_text_w = ScrollTextWidget:new {
             text      = format_front(self.card),
             face      = front_face,
@@ -219,7 +236,16 @@ function CardViewer:init()
             alignment = "center",
             justified = false,
         }
-        content_widget = self.scroll_text_w
+
+        if img_widget then
+            content_widget = VerticalGroup:new {
+                img_widget,
+                VerticalSpan:new { height = gap },
+                self.scroll_text_w,
+            }
+        else
+            content_widget = self.scroll_text_w
+        end
     else
         -- ── BACK: optional image + all fields ────────────────────────────────
         local image_path = self.card and self.card.image_path

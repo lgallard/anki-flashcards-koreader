@@ -225,8 +225,8 @@ function AnkiFlashcards:init()
                                             new_card.phrase,
                                             function(img_path)
                                                 new_card.image_path = img_path
-                                                -- Refresh viewer only if it's showing the back.
-                                                if viewer_ref[1] and viewer_ref[1].show_back then
+                                                CardStorage.update_image_path(new_card.phrase, img_path)
+                                                if viewer_ref[1] then
                                                     local nv2 = viewer_ref[1]:update(new_card)
                                                     viewer_ref[1] = nv2
                                                 end
@@ -253,13 +253,12 @@ function AnkiFlashcards:init()
                             card.phrase,
                             function(img_path)
                                 card.image_path = img_path
-                                -- Only repaint if the user is already on the back.
-                                if viewer_ref[1] and viewer_ref[1].show_back then
+                                CardStorage.update_image_path(card.phrase, img_path)
+                                -- Refresh whichever side is showing.
+                                if viewer_ref[1] then
                                     local nv = viewer_ref[1]:update(card)
                                     viewer_ref[1] = nv
                                 end
-                                -- If still on front, image_path is in card already;
-                                -- it will appear when the user flips to the back.
                             end,
                             nil  -- image errors are non-fatal
                         )
