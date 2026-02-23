@@ -53,11 +53,17 @@ function CardGenerator.generate(config, phrase, context, title, author)
         return nil, "API key not configured"
     end
 
+    -- Use function-form replacement to prevent % in values being treated as
+    -- gsub pattern specials (e.g. book text containing "100%").
+    local t = escape_for_prompt(title   or "Unknown")
+    local a = escape_for_prompt(author  or "Unknown")
+    local p = escape_for_prompt(phrase  or "")
+    local c = escape_for_prompt(context or "")
     local prompt = PROMPT_TEMPLATE
-        :gsub("{title}",   escape_for_prompt(title   or "Unknown"))
-        :gsub("{author}",  escape_for_prompt(author  or "Unknown"))
-        :gsub("{phrase}",  escape_for_prompt(phrase  or ""))
-        :gsub("{context}", escape_for_prompt(context or ""))
+        :gsub("{title}",   function() return t end)
+        :gsub("{author}",  function() return a end)
+        :gsub("{phrase}",  function() return p end)
+        :gsub("{context}", function() return c end)
 
     local request_body = json.encode({
         model    = config.model or "models/gemini-2.5-flash",

@@ -132,4 +132,4 @@ function get_selection_in_context(document, selection, window)
     return left .. ' {{{ ' .. selection .. ' }}} ' .. right
 end
 
-return get_selection_in_context
+return get_selection_in_context, selection_to_text

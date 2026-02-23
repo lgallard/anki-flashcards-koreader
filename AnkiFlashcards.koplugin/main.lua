@@ -10,7 +10,7 @@ local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
 local _              = require("gettext")
 
-local get_selection_in_context = require("selection_context")
+local get_selection_in_context, selection_to_text = require("selection_context")
 
 local CardGenerator    = require("card_generator")
 local CardViewer       = require("card_viewer")
@@ -89,7 +89,7 @@ function AnkiFlashcards:init()
                 )
 
                 -- Highlighted text and surrounding context.
-                local highlighted = tostring(rhi.selected_text.text or "")
+                local highlighted = selection_to_text(rhi.selected_text or "")
                 local phrase      = capitalize_first(clean_str(highlighted, MAX_HL))
                 local context     = clean_str(
                     get_selection_in_context(ui.document, highlighted, 10),
@@ -118,7 +118,7 @@ function AnkiFlashcards:init()
 
                 -- Show a loading notification while the AI call runs.
                 local loading = Notification:new {
-                    text    = _("Generating flashcard…"),
+                    text    = _("Generating flashcard for: ") .. phrase,
                     timeout = 30,
                 }
                 UIManager:show(loading)
