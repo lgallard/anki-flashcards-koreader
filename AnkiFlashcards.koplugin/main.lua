@@ -5,6 +5,7 @@
 
 local Device         = require("device")
 local InputContainer = require("ui/widget/container/inputcontainer")
+local NetworkMgr     = require("ui/network/manager")
 local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
 local _              = require("gettext")
@@ -282,7 +283,9 @@ function AnkiFlashcards:init()
                     end
                 end
 
-                UIManager:scheduleIn(0.05, function() do_generate(2) end)
+                NetworkMgr:runWhenOnline(function()
+                    UIManager:scheduleIn(0.05, function() do_generate(2) end)
+                end)
             end,
         }
     end)

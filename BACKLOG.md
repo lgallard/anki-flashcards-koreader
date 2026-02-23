@@ -13,63 +13,38 @@
 | `ImageFront`| `<img src="...">` — scene image (anime style)    |
 | `ImageBack` | `<img src="...">` — same or alternate image      |
 | `Sound`     | `[sound:...]` — pronunciation audio              |
-| `Source`    | Book title — Author                              |
+| `Source`    | Cambridge Dictionary URL for the phrase          |
+
+---
+
+## DONE
+
+### ✅ 1. Card Viewer — Front Side: Match Anki Generator App Template
+
+Image at top + blanked cloze `[___]` + Synonyms. No labels, no hidden fields.
+`card_viewer.lua` — `blank_cloze()` replaces `{{c1::phrase}}` with `[___]`.
+
+### ✅ 2. Card Viewer — Back Side: Match Anki Generator App Template
+
+Image + **Phrase** (bold) + IPA + Definition + Synonyms + revealed cloze + Source. No `[Label]` prefixes.
+`card_viewer.lua` — `reveal_cloze()` replaces `{{c1::phrase}}` with the bare phrase.
+
+### ✅ 3. Send Image to Anki via AnkiConnect
+
+`anki_sync.lua` — replaced `picture` array with `storeMediaFile` + `ImageFront`/`ImageBack` fields.
+Unique filename: `<phrase_slug>_<timestamp>.png`.
+
+### ✅ Source Field: Cambridge Dictionary URL
+
+`main.lua` — `cambridge_url()` generates `https://dictionary.cambridge.org/dictionary/english/<phrase-slug>` from the phrase. Matches `anki-card-generator` app logic.
+
+### ✅ WiFi: Auto-prompt before card generation
+
+`main.lua` — wrapped generation in `NetworkMgr:runWhenOnline()` so KOReader prompts to enable WiFi if off instead of failing with a socket error.
 
 ---
 
 ## TODO
-
-### 1. Card Viewer — Front Side: Match Anki Generator App Template
-
-**Priority:** High
-
-The front side of the card viewer in KOReader must match the Anki front template:
-- Show the **AI-generated image** (ImageFront) at the top
-- Show the **cloze sentence** (`Text` field) with the key word visually blanked or highlighted — e.g. `Her [___] discovery changed everything.`
-- Show **Synonyms** below the cloze sentence
-- Do NOT show Phrase, IPA, Definition, or Source on the front
-
-Currently the front shows all fields with `[Label]` prefixes — this needs to be redesigned to match the Anki card experience.
-
-**Reference:** `anki-card-generator/src/anki_exporter.py` — `ImageFront` + `Text` + `Synonyms` fields.
-
----
-
-### 2. Card Viewer — Back Side: Match Anki Generator App Template
-
-**Priority:** High
-
-The back side must match the Anki back template:
-- Show the **AI-generated image** (ImageBack / same image) at the top
-- Show **Phrase** (large, prominent)
-- Show **IPA** below the phrase
-- Show **Definition**
-- Show **Synonyms**
-- Show the **full cloze sentence** (with the word revealed, not blanked)
-- Show **Source** at the bottom (small/muted)
-- Remove all `[Label]` prefixes (`[Phrase]`, `[IPA]`, `[Definition]`, etc.) — the layout itself communicates the structure
-
----
-
-### 3. Send Image to Anki via AnkiConnect
-
-**Priority:** High
-
-When tapping "→ Anki", the card image must be uploaded to Anki's media collection and referenced in the `ImageFront` and `ImageBack` fields.
-
-Current state: `anki_sync.lua` sends image bytes via the `picture` array in `addNote`, but this doesn't populate the `ImageFront`/`ImageBack` fields correctly for the "English" note type.
-
-**Required approach** (matching `anki_exporter.py`):
-1. Read image file from device (`card.image_path`)
-2. Generate a unique filename: `<phrase>_<timestamp>.png`
-3. Call `storeMediaFile` AnkiConnect action with base64-encoded image data
-4. Set `ImageFront` field to `<img src="<filename>">`
-5. Set `ImageBack` field to the same `<img src="<filename>">`
-6. Remove the current `picture` array approach from `addNote`
-
-**Reference:** `anki-card-generator/src/anki_exporter.py` — `store_media_file()` + `add_card_to_anki()`.
-
----
 
 ### 4. Investigate: Light Anki Client Inside KOReader / Native Kobo App
 

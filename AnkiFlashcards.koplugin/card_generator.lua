@@ -1,4 +1,4 @@
--- AI flashcard generator — makes a single non-streaming call to Gemini
+-- AI flashcard generator — makes a single non-streaming call to Qwen via DashScope
 -- and returns a structured card table.
 
 local https  = require("ssl.https")
@@ -49,7 +49,8 @@ end
 -- card_table fields: phrase, ipa, definition, synonyms, text
 -- source/book_title/book_author are added by main.lua.
 function CardGenerator.generate(config, phrase, context, title, author)
-    if not config or not config.api_key or config.api_key == "" then
+    local api_key = config and (config.dashscope_api_key or config.api_key) or ""
+    if api_key == "" then
         return nil, "API key not configured"
     end
 
@@ -66,19 +67,23 @@ function CardGenerator.generate(config, phrase, context, title, author)
         :gsub("{context}", function() return c end)
 
     local request_body = json.encode({
-        model    = config.model or "models/gemini-2.5-flash",
+        model    = config.model or "qwen-plus",
         messages = {{ role = "user", content = prompt }},
     })
 
     local headers = {
         ["Content-Type"]  = "application/json",
-        ["Authorization"] = "Bearer " .. config.api_key,
+        ["Authorization"] = "Bearer " .. api_key,
     }
+
+    local provider = config.provider
+    if not provider or provider == "" then
+        provider = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+    end
 
     local response_body = {}
     local ok, code = https.request {
-        url     = config.provider
-                  or "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        url     = provider,
         method  = "POST",
         headers = headers,
         source  = ltn12.source.string(request_body),
