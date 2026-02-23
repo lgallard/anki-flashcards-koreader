@@ -6,7 +6,22 @@
 local http  = require("socket.http")
 local ltn12 = require("ltn12")
 local json  = require("json")
-local mime  = require("mime")
+
+-- Pure-Lua base64 encoder (avoids mime streaming-filter pitfalls).
+local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local function base64_encode(data)
+    local out = {}
+    for i = 1, #data, 3 do
+        local a, b, c = data:byte(i, i + 2)
+        b = b or 0; c = c or 0
+        local n = a * 65536 + b * 256 + c
+        out[#out+1] = B64:sub(math.floor(n/262144)%64+1, math.floor(n/262144)%64+1)
+        out[#out+1] = B64:sub(math.floor(n/4096)%64+1,   math.floor(n/4096)%64+1)
+        out[#out+1] = (i+1 <= #data) and B64:sub(math.floor(n/64)%64+1, math.floor(n/64)%64+1) or "="
+        out[#out+1] = (i+2 <= #data) and B64:sub(n%64+1, n%64+1) or "="
+    end
+    return table.concat(out)
+end
 
 local TIMEOUT = 5  -- fail fast on offline/unreachable host
 
@@ -96,18 +111,19 @@ function AnkiSync.send_card(config, card)
 
     -- Attach image if available (base64-encoded for AnkiConnect).
     if card.image_path then
-        local f = io.open(card.image_path, "rb")
-        if f then
-            local raw  = f:read("*a")
+        pcall(function()
+            local f = io.open(card.image_path, "rb")
+            if not f then return end
+            local raw   = f:read("*a")
             f:close()
-            local b64  = mime.b64(raw)
+            local b64   = base64_encode(raw)
             local fname = card.image_path:match("[^/]+$") or "card_image.png"
             note.picture = {{
                 data     = b64,
                 filename = fname,
                 fields   = { "Image" },
             }}
-        end
+        end)
     end
 
     local params = { note = note }
