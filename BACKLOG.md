@@ -46,39 +46,117 @@ Unique filename: `<phrase_slug>_<timestamp>.png`.
 
 ## TODO
 
-### 4. Investigate: Light Anki Client Inside KOReader / Native Kobo App
+### Strategic Direction
 
-**Priority:** Medium — Research
+**Kobo = world's best card creation on-ramp. Anki = review engine.**
 
-Investigate feasibility of implementing a spaced-repetition review session directly on the Kobo, syncing with Anki's scheduling data.
-
-**Questions to answer:**
-- Can AnkiConnect expose due cards and scheduling data (intervals, ease, due dates)?
-  - Actions: `findCards`, `cardsInfo`, `answerCards`
-- Is the Anki SM-2 scheduling algorithm simple enough to implement in Lua?
-- Can we store scheduling state locally (due dates, intervals, ease factors) in the KOReader data dir?
-- Two sync strategies:
-  - **Online-only**: Fetch due cards from AnkiConnect over WiFi, answer on device, push results back
-  - **Offline-first**: Sync deck to device when connected, review offline, push results on next connection
-- KOReader UI constraints: no WebView, limited widget set — review UI would use `CardViewer`-style full-screen widgets with gesture/button input (Again / Hard / Good / Easy)
-- Kobo-native alternative: standalone `.so` plugin or Python app via KFMon — higher complexity
-
-**Deliverable:** A short feasibility note added to this file before committing to implementation.
+The plugin's goal is to make the highlight→flashcard pipeline as frictionless and intelligent as possible, feeding a high-quality stream of cards into Anki for review. A light Anki review client on Kobo was considered and rejected: storage bloat (images/audio = hundreds of MB), no audio playback in Lua plugins, e-ink latency, and bi-directional sync complexity all make it inferior to native Anki.
 
 ---
 
-### 5. (Out of Scope) Investigate: Own Anki-Compatible Platform
+### Tier 1 — Quick Wins
 
-**Priority:** Low — Exploratory
+#### 4. Deck Per Book
 
-Investigate building a self-hosted, Anki-compatible spaced repetition platform as a long-term alternative.
+**Priority:** High — Trivial effort
 
-**Questions to answer:**
-- What does the minimum viable SRS platform look like?
-  - Card storage (SQLite or JSON), SM-2 or FSRS scheduling, review UI
-- Can we expose an AnkiConnect-compatible HTTP API so existing tools (KOReader plugin, anki-card-generator) continue to work unchanged?
-- Hosting options: local Mac app, self-hosted web app (FastAPI + SQLite), or cloud
-- Sync between Kobo and platform: same AnkiConnect protocol over LAN/VPN
-- Anki `.apkg` import/export for migration
+Automatically route cards to a deck named after the current book: `English::<book_title>` instead of the fixed `English::Koreader` deck.
 
-**Deliverable:** Architecture sketch only — no implementation until item 4 is resolved.
+- `book_title` is already stored on every card (`card.book_title`)
+- Change `config.deck` fallback in `anki_sync.lua`: use `card.book_title` when available
+- Sanitise the title (strip special chars) to produce a valid Anki deck name
+- Example: reading *The Power of Habit* → cards go to `English::The Power of Habit`
+
+---
+
+#### 5. Duplicate Detection
+
+**Priority:** High — Low effort
+
+Before generating a card, query AnkiConnect to check whether a card for that phrase already exists in the collection. Skip generation and notify the user if a duplicate is found.
+
+- AnkiConnect action: `findNotes` with query `"Phrase:<phrase> deck:English"`
+- Call this check before showing the loading notification
+- Show "Already in Anki" notification if a duplicate exists
+- Avoids bloating the deck with repeated words across re-reads
+
+---
+
+#### 6. Auto-Send on WiFi
+
+**Priority:** High — Medium effort
+
+When the Kobo connects to WiFi (e.g., for sync or browsing), silently flush all unsent locally-saved cards to AnkiConnect in the background.
+
+- Use `NetworkMgr` event/callback to detect WiFi becoming available
+- Trigger `AnkiSync.send_card` for each unsent card in `CardStorage.load_cards()`
+- Show a brief notification: "3 cards sent to Anki"
+- No user action required — cards appear in Anki automatically
+
+---
+
+### Tier 2 — Core Experience Upgrade
+
+#### 7. Highlight Inbox — Batch Card Creation
+
+**Priority:** High — Medium effort
+
+Browse all highlights from the current book and select which ones to convert to flashcards. Replaces the interruptive one-by-one generation flow with a focused end-of-chapter batch session.
+
+- Access KOReader's highlight database (`ui/widget/bookstatuswidget` or the reader's highlight API)
+- Show a scrollable list of all highlights for the current book
+- User taps to select/deselect highlights
+- Tap "Generate Selected" → AI generates cards sequentially with a progress indicator
+- Already-carded highlights are marked (greyed out or checkmarked)
+- Respects reading flow: no interruption mid-sentence
+
+---
+
+#### 8. Per-Book Progress Dashboard
+
+**Priority:** Medium — Low effort
+
+A stats screen showing vocabulary progress per book: highlights converted, cards created, cards sent to Anki.
+
+- Data is already available: `book_title` + `book_author` on every stored card
+- Group `CardStorage.load_cards()` by `book_title`
+- Show per-book counts: created / sent / unsent
+- Accessible from the "📚 My Cards" menu as a "📊 Stats" entry
+
+---
+
+### Tier 3 — Polish
+
+#### 9. Context Crafter — Regenerate Example Sentence
+
+**Priority:** Medium
+
+"Simpler example" button on the card back: asks AI to regenerate only the cloze `Text` field with a cleaner or simpler sentence. Useful when the AI-generated sentence is awkward or too complex.
+
+---
+
+#### 10. Art Director — Regenerate Image Only
+
+**Priority:** Medium
+
+"New image" button that triggers a new DashScope image generation without regenerating the full card. Useful when the image doesn't match the card's meaning.
+
+---
+
+#### 11. Lexical Linker — Related Word Suggestions
+
+**Priority:** Low
+
+After a card is generated, the AI suggests 2–3 related word-family terms (e.g., after carding "decisive" → suggests "decide", "indecisive", "decision"). One tap queues them for card generation.
+
+---
+
+### Dropped / Out of Scope
+
+#### ~~Light Anki Review Client~~ — Rejected
+
+Storage bloat (synced images/audio = hundreds of MB), no audio playback in KOReader Lua plugins, e-ink latency for review UX, and bi-directional SM-2 sync complexity all make this inferior to native Anki. The Kobo's role is creation, not review.
+
+#### ~~Own Anki-Compatible SRS Platform~~ — Deferred indefinitely
+
+Requires resolving the review client feasibility first. Out of scope until items 4–8 are complete.
