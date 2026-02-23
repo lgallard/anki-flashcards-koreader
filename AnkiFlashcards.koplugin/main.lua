@@ -139,13 +139,25 @@ function AnkiFlashcards:init()
                 UIManager:show(loading)
 
                 -- Schedule the AI call so the UI can render the notification first.
-                UIManager:scheduleIn(0.05, function()
+                -- Retries up to 2 times on HTTP 429 (rate limit), waiting 5s between attempts.
+                local function do_generate(attempts_left)
                     UIManager:close(loading)
-
                     local card, err = CardGenerator.generate(
                         CONFIGURATION, phrase, context, title, author
                     )
                     if not card then
+                        if err and err:find("429") and attempts_left > 0 then
+                            local rn = Notification:new {
+                                text    = _("Rate limited — retrying in 5 s…"),
+                                timeout = 6,
+                            }
+                            UIManager:show(rn)
+                            UIManager:scheduleIn(5, function()
+                                UIManager:close(rn)
+                                do_generate(attempts_left - 1)
+                            end)
+                            return
+                        end
                         UIManager:show(Notification:new {
                             text    = _("Card generation failed: ") .. (err or "unknown"),
                             timeout = 5,
@@ -263,7 +275,9 @@ function AnkiFlashcards:init()
                             nil  -- image errors are non-fatal
                         )
                     end
-                end)
+                end
+
+                UIManager:scheduleIn(0.05, function() do_generate(2) end)
             end,
         }
     end)
