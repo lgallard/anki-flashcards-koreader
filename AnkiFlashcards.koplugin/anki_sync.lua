@@ -130,7 +130,7 @@ function AnkiSync.send_card(config, card)
 
     local result, err = post(config.url, "addNote", params)
     if not result then return nil, err end
-    if result.error  then return nil, result.error end
+    if type(result.error) == "string" then return nil, result.error end
     return true
 end
 
