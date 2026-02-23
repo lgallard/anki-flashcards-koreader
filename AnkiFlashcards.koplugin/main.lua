@@ -10,7 +10,7 @@ local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
 local _              = require("gettext")
 
-local get_selection_in_context, selection_to_text = require("selection_context")
+local get_selection_in_context = require("selection_context")
 
 local CardGenerator    = require("card_generator")
 local CardViewer       = require("card_viewer")
@@ -52,6 +52,30 @@ local function capitalize_first(s)
     return (s:gsub("^%l", string.upper))
 end
 
+-- Safely unwrap rhi.selected_text which may be a string, a table with a
+-- .text field, or a nested structure depending on the KOReader backend.
+local function extract_text(sel)
+    if type(sel) == "string" then return sel end
+    if type(sel) ~= "table"  then return "" end
+    if type(sel.text) == "string" then return sel.text end
+    -- Nested spans/lines: collect string leaves
+    local parts = {}
+    local function collect(t)
+        for _, v in ipairs(t) do
+            if type(v) == "string" then
+                parts[#parts + 1] = v
+            elseif type(v) == "table" then
+                if type(v.text) == "string" then parts[#parts + 1] = v.text end
+                if v.spans    then collect(v.spans)    end
+                if v.segments then collect(v.segments) end
+                if v.lines    then collect(v.lines)    end
+            end
+        end
+    end
+    collect(sel)
+    return table.concat(parts)
+end
+
 -- Build the effective Anki config by merging saved settings on top of
 -- the config table loaded at startup.
 local function get_anki_config()
@@ -89,7 +113,7 @@ function AnkiFlashcards:init()
                 )
 
                 -- Highlighted text and surrounding context.
-                local highlighted = selection_to_text(rhi.selected_text or "")
+                local highlighted = extract_text(rhi.selected_text or "")
                 local phrase      = capitalize_first(clean_str(highlighted, MAX_HL))
                 local context     = clean_str(
                     get_selection_in_context(ui.document, highlighted, 10),
