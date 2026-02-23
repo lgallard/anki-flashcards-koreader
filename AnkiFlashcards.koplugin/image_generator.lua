@@ -49,6 +49,9 @@ local function https_request(method, url, api_key, body, extra_headers)
         source  = body and ltn12.source.string(body) or nil,
         sink    = ltn12.sink.table(response),
     }
+    if tostring(code) == "429" then
+        return nil, "RATE_LIMITED"
+    end
     if tostring(code) ~= "200" then
         local detail = table.concat(response):sub(1, 300)
         return nil, "HTTP " .. tostring(code) .. ": " .. detail
@@ -158,10 +161,11 @@ function ImageGenerator.generate_async(config, image_prompt, phrase, on_success,
     local save_path = IMAGE_DIR .. "/" .. safe .. ".png"
 
     -- Step 2: Poll until SUCCEEDED (or failure / timeout).
+    -- Poll every 5s; back off to 15s on rate-limit (429).
     local attempts = 0
     local function poll()
         attempts = attempts + 1
-        if attempts > 30 then
+        if attempts > 20 then
             if on_error then on_error("Image generation timed out") end
             return
         end
@@ -174,15 +178,20 @@ function ImageGenerator.generate_async(config, image_prompt, phrase, on_success,
                 if on_error then on_error(dl_err) end
             end
         elseif status == nil then
-            if on_error then on_error(url_or_err) end
+            if url_or_err == "RATE_LIMITED" then
+                -- Back off for 15 seconds before retrying.
+                UIManager:scheduleIn(15, poll)
+            else
+                if on_error then on_error(url_or_err) end
+            end
         else
-            -- Still PENDING or RUNNING — try again in 2 seconds.
-            UIManager:scheduleIn(2, poll)
+            -- Still PENDING or RUNNING — try again in 5 seconds.
+            UIManager:scheduleIn(5, poll)
         end
     end
 
-    -- Give the API a 3-second head start before first poll.
-    UIManager:scheduleIn(3, poll)
+    -- Give the API a 5-second head start before first poll.
+    UIManager:scheduleIn(5, poll)
 end
 
 return ImageGenerator
