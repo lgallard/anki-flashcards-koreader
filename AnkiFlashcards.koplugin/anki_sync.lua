@@ -6,6 +6,7 @@
 local http  = require("socket.http")
 local ltn12 = require("ltn12")
 local json  = require("json")
+local mime  = require("mime")
 
 local TIMEOUT = 5  -- fail fast on offline/unreachable host
 
@@ -82,18 +83,34 @@ function AnkiSync.send_card(config, card)
         fields[first] = card.phrase or ""
     end
 
-    local params = {
-        note = {
-            deckName  = config.deck or "English::Koreader",
-            modelName = model,
-            fields    = fields,
-            options   = {
-                allowDuplicate = false,
-                duplicateScope = "deck",
-            },
-            tags = config.tags or { "KOReader" },
-        }
+    local note = {
+        deckName  = config.deck or "English::Koreader",
+        modelName = model,
+        fields    = fields,
+        options   = {
+            allowDuplicate = false,
+            duplicateScope = "deck",
+        },
+        tags = config.tags or { "KOReader" },
     }
+
+    -- Attach image if available (base64-encoded for AnkiConnect).
+    if card.image_path then
+        local f = io.open(card.image_path, "rb")
+        if f then
+            local raw  = f:read("*a")
+            f:close()
+            local b64  = mime.b64(raw)
+            local fname = card.image_path:match("[^/]+$") or "card_image.png"
+            note.picture = {{
+                data     = b64,
+                filename = fname,
+                fields   = { "Image" },
+            }}
+        end
+    end
+
+    local params = { note = note }
 
     local result, err = post(config.url, "addNote", params)
     if not result then return nil, err end

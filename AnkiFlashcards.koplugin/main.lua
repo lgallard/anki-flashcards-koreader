@@ -240,7 +240,12 @@ function AnkiFlashcards:init()
                                                     viewer_ref[1] = nv2
                                                 end
                                             end,
-                                            nil  -- silently ignore image errors
+                                            function(img_err)
+                                                UIManager:show(Notification:new {
+                                                    text    = _("Image error: ") .. (img_err or "unknown"),
+                                                    timeout = 5,
+                                                })
+                                            end
                                         )
                                     end
                                 end)
@@ -270,7 +275,12 @@ function AnkiFlashcards:init()
                                 -- If still on front, image_path is in card already;
                                 -- it will appear when the user flips to the back.
                             end,
-                            nil  -- silently ignore image generation errors
+                            function(img_err)
+                                UIManager:show(Notification:new {
+                                    text    = _("Image error: ") .. (img_err or "unknown"),
+                                    timeout = 5,
+                                })
+                            end
                         )
                     end
                 end)
