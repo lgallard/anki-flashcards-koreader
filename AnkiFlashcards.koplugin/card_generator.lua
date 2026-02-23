@@ -23,7 +23,8 @@ Return ONLY a valid JSON object, no other text:
   "ipa": "<American English IPA transcription, e.g. /ˈwɜːrd/>",
   "definition": "<context-aware definition, max 20 words>",
   "synonyms": "<3-4 synonyms, comma-separated>",
-  "text": "<natural example sentence using the phrase in the SAME meaning but different situation, with {{c1::phrase}} wrapping the key word>"
+  "text": "<natural example sentence using the phrase in the SAME meaning but different situation, with {{c1::phrase}} wrapping the key word>",
+  "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
 local function escape_for_prompt(s)

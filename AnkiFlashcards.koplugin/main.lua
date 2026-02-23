@@ -12,11 +12,12 @@ local _              = require("gettext")
 
 local get_selection_in_context = require("selection_context")
 
-local CardGenerator  = require("card_generator")
-local CardViewer     = require("card_viewer")
-local CardStorage    = require("card_storage")
-local AnkiSync       = require("anki_sync")
-local CardManager    = require("card_manager")
+local CardGenerator    = require("card_generator")
+local CardViewer       = require("card_viewer")
+local CardStorage      = require("card_storage")
+local AnkiSync         = require("anki_sync")
+local CardManager      = require("card_manager")
+local ImageGenerator   = require("image_generator")
 
 local MAX_HL    = 2000
 local MAX_TITLE = 100
@@ -141,12 +142,22 @@ function AnkiFlashcards:init()
                     card.book_title  = title
                     card.book_author = author
 
-                    -- viewer_ref lets the regenerate callback close the current viewer.
+                    -- viewer_ref[1] always holds the currently visible CardViewer.
                     local viewer_ref = {}
 
-                    local function make_viewer(c)
-                        local v = CardViewer:new {
-                            card = c,
+                    -- make_viewer creates a CardViewer for card c.
+                    -- show_back=false → front (question) side.
+                    local function make_viewer(c, show_back_flag)
+                        local v
+                        v = CardViewer:new {
+                            card      = c,
+                            show_back = show_back_flag or false,
+
+                            on_show_answer = function()
+                                UIManager:close(v)
+                                local nv = make_viewer(c, true)
+                                viewer_ref[1] = nv
+                            end,
 
                             on_save = function()
                                 local ok2, save_err = CardStorage.save_card(c)
@@ -188,8 +199,26 @@ function AnkiFlashcards:init()
                                     new_card.source      = source
                                     new_card.book_title  = title
                                     new_card.book_author = author
-                                    local nv = make_viewer(new_card)
+                                    -- Regenerated card starts on front again.
+                                    local nv = make_viewer(new_card, false)
                                     viewer_ref[1] = nv
+                                    -- Kick off new image generation.
+                                    if new_card.image_prompt then
+                                        ImageGenerator.generate_async(
+                                            CONFIGURATION,
+                                            new_card.image_prompt,
+                                            new_card.phrase,
+                                            function(img_path)
+                                                new_card.image_path = img_path
+                                                -- Refresh viewer only if it's showing the back.
+                                                if viewer_ref[1] and viewer_ref[1].show_back then
+                                                    local nv2 = viewer_ref[1]:update(new_card)
+                                                    viewer_ref[1] = nv2
+                                                end
+                                            end,
+                                            nil  -- silently ignore image errors
+                                        )
+                                    end
                                 end)
                             end,
                         }
@@ -197,8 +226,29 @@ function AnkiFlashcards:init()
                         return v
                     end
 
-                    local initial_viewer = make_viewer(card)
+                    -- Open on the front side.
+                    local initial_viewer = make_viewer(card, false)
                     viewer_ref[1] = initial_viewer
+
+                    -- Start image generation in background.
+                    if card.image_prompt then
+                        ImageGenerator.generate_async(
+                            CONFIGURATION,
+                            card.image_prompt,
+                            card.phrase,
+                            function(img_path)
+                                card.image_path = img_path
+                                -- Only repaint if the user is already on the back.
+                                if viewer_ref[1] and viewer_ref[1].show_back then
+                                    local nv = viewer_ref[1]:update(card)
+                                    viewer_ref[1] = nv
+                                end
+                                -- If still on front, image_path is in card already;
+                                -- it will appear when the user flips to the back.
+                            end,
+                            nil  -- silently ignore image generation errors
+                        )
+                    end
                 end)
             end,
         }

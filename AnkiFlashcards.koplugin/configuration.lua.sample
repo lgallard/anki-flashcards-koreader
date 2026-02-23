@@ -1,7 +1,8 @@
 local CONFIGURATION = {
-    api_key  = "YOUR_API_KEY_HERE",
-    provider = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    model    = "models/gemini-2.5-flash",
+    api_key           = "YOUR_GEMINI_API_KEY",
+    provider          = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    model             = "models/gemini-2.5-flash",
+    dashscope_api_key = "YOUR_DASHSCOPE_API_KEY",  -- Qwen image generation (dashscope-intl)
 
     -- ── Anki integration ────────────────────────────────────────────────────
     -- Requires AnkiConnect add-on running on your Mac.
