@@ -51,6 +51,11 @@ local function capitalize_first(s)
     return (s:gsub("^%l", string.upper))
 end
 
+local function cambridge_url(phrase)
+    local slug = (phrase or ""):lower():gsub("%s+", "-")
+    return "https://dictionary.cambridge.org/dictionary/english/" .. slug
+end
+
 -- Safely unwrap rhi.selected_text which may be a string, a table with a
 -- .text field, or a nested structure depending on the KOReader backend.
 local function extract_text(sel)
@@ -165,7 +170,7 @@ function AnkiFlashcards:init()
                         return
                     end
 
-                    card.source      = source
+                    card.source      = cambridge_url(card.phrase)
                     card.book_title  = title
                     card.book_author = author
 
@@ -223,7 +228,7 @@ function AnkiFlashcards:init()
                                         })
                                         return
                                     end
-                                    new_card.source      = source
+                                    new_card.source      = cambridge_url(new_card.phrase)
                                     new_card.book_title  = title
                                     new_card.book_author = author
                                     -- Regenerated card starts on front again.

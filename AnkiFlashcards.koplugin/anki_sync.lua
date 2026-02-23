@@ -49,6 +49,17 @@ local function post(url, action, params)
     return result
 end
 
+-- Store a media file in Anki's media folder. Returns stored filename or nil + err.
+local function store_media_file(url, filename, b64_data)
+    local result, err = post(url, "storeMediaFile", {
+        filename = filename,
+        data     = b64_data,
+    })
+    if not result then return nil, err end
+    if type(result.error) == "string" then return nil, result.error end
+    return result.result or filename
+end
+
 -- Cache first-field name per model for the session.
 local first_field_cache = {}
 
@@ -109,20 +120,22 @@ function AnkiSync.send_card(config, card)
         tags = config.tags or { "KOReader" },
     }
 
-    -- Attach image if available (base64-encoded for AnkiConnect).
+    -- Store image via storeMediaFile and reference it in ImageFront/ImageBack fields.
     if card.image_path then
         pcall(function()
             local f = io.open(card.image_path, "rb")
             if not f then return end
-            local raw   = f:read("*a")
+            local raw = f:read("*a")
             f:close()
-            local b64   = base64_encode(raw)
-            local fname = card.image_path:match("[^/]+$") or "card_image.png"
-            note.picture = {{
-                data     = b64,
-                filename = fname,
-                fields   = { "Image" },
-            }}
+            local b64         = base64_encode(raw)
+            local phrase_slug = (card.phrase or "card"):gsub("[^%w]", "_"):lower()
+            local fname       = phrase_slug .. "_" .. tostring(os.time()) .. ".png"
+            local stored      = store_media_file(config.url, fname, b64)
+            if stored then
+                local img_ref        = '<img src="' .. stored .. '">'
+                fields["ImageFront"] = img_ref
+                fields["ImageBack"]  = img_ref
+            end
         end)
     end
 

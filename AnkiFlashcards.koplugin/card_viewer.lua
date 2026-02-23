@@ -40,21 +40,34 @@ end
 
 -- ── Content formatters ────────────────────────────────────────────────────────
 
+local function blank_cloze(text)
+    -- Replace {{c1::phrase}} with [___]
+    return (text or ""):gsub("{{c%d+::(.-)}}",  "[___]")
+end
+
+local function reveal_cloze(text)
+    -- Replace {{c1::phrase}} with the phrase itself
+    return (text or ""):gsub("{{c%d+::(.-)}}",  "%1")
+end
+
 local function format_front(card)
     local c = card or {}
-    return (c.phrase or "") .. "\n\n" .. (c.ipa or "")
+    local parts = {}
+    local cloze = blank_cloze(c.text or "")
+    if cloze ~= "" then table.insert(parts, cloze) end
+    if (c.synonyms or "") ~= "" then table.insert(parts, c.synonyms) end
+    return table.concat(parts, "\n\n")
 end
 
 local function format_back(card)
     local c = card or {}
-    local lines = {
-        ptf_bold("[Phrase]")     .. "      " .. (c.phrase     or ""),
-        ptf_bold("[IPA]")        .. "         " .. (c.ipa        or ""),
-        ptf_bold("[Definition]") .. "  "       .. (c.definition or ""),
-        ptf_bold("[Synonyms]")   .. "   "      .. (c.synonyms   or ""),
-        ptf_bold("[Text]")       .. "        " .. (c.text       or ""),
-        ptf_bold("[Source]")     .. "      "   .. (c.source     or ""),
-    }
+    local lines = {}
+    if (c.phrase     or "") ~= "" then table.insert(lines, ptf_bold(c.phrase)) end
+    if (c.ipa        or "") ~= "" then table.insert(lines, c.ipa) end
+    if (c.definition or "") ~= "" then table.insert(lines, c.definition) end
+    if (c.synonyms   or "") ~= "" then table.insert(lines, c.synonyms) end
+    if (c.text       or "") ~= "" then local r = reveal_cloze(c.text); table.insert(lines, r) end
+    if (c.source     or "") ~= "" then table.insert(lines, c.source) end
     return table.concat(lines, "\n\n")
 end
 
