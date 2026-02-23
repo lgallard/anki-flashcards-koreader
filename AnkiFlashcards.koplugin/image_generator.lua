@@ -149,49 +149,58 @@ function ImageGenerator.generate_async(config, image_prompt, phrase, on_success,
 
     local UIManager = require("ui/uimanager")
 
-    -- Step 1: Create the image task.
-    local task_id, err = create_task(api_key, image_prompt)
-    if not task_id then
-        if on_error then on_error(err) end
-        return
-    end
-
     -- Build a safe filename from the phrase.
     local safe = (phrase or "card"):lower():gsub("[^%w%-%_]", "_"):sub(1, 40)
     local save_path = IMAGE_DIR .. "/" .. safe .. ".png"
 
-    -- Step 2: Poll until SUCCEEDED (or failure / timeout).
-    -- Poll every 5s; back off to 15s on rate-limit (429).
-    local attempts = 0
-    local function poll()
-        attempts = attempts + 1
-        if attempts > 20 then
-            if on_error then on_error("Image generation timed out") end
-            return
-        end
-        local status, url_or_err = check_task(api_key, task_id)
-        if status == "SUCCEEDED" then
-            local ok2, dl_err = download_image(url_or_err, save_path)
-            if ok2 then
-                if on_success then on_success(save_path) end
-            else
-                if on_error then on_error(dl_err) end
+    -- Start the polling loop for an already-created task_id.
+    local function start_polling(task_id)
+        local attempts = 0
+        local function poll()
+            attempts = attempts + 1
+            if attempts > 20 then
+                if on_error then on_error("Image generation timed out") end
+                return
             end
-        elseif status == nil then
-            if url_or_err == "RATE_LIMITED" then
-                -- Back off for 15 seconds before retrying.
-                UIManager:scheduleIn(15, poll)
+            local status, url_or_err = check_task(api_key, task_id)
+            if status == "SUCCEEDED" then
+                local ok2, dl_err = download_image(url_or_err, save_path)
+                if ok2 then
+                    if on_success then on_success(save_path) end
+                else
+                    if on_error then on_error(dl_err) end
+                end
+            elseif status == nil then
+                if url_or_err == "RATE_LIMITED" then
+                    UIManager:scheduleIn(15, poll)
+                else
+                    if on_error then on_error(url_or_err) end
+                end
             else
-                if on_error then on_error(url_or_err) end
+                -- Still PENDING or RUNNING — try again in 5 seconds.
+                UIManager:scheduleIn(5, poll)
             end
-        else
-            -- Still PENDING or RUNNING — try again in 5 seconds.
-            UIManager:scheduleIn(5, poll)
         end
+        -- Give the API a 5-second head start before first poll.
+        UIManager:scheduleIn(5, poll)
     end
 
-    -- Give the API a 5-second head start before first poll.
-    UIManager:scheduleIn(5, poll)
+    -- Schedule task creation so the card viewer can render before we block.
+    local function try_create()
+        local task_id, err = create_task(api_key, image_prompt)
+        if not task_id then
+            if err == "RATE_LIMITED" then
+                -- Retry task creation itself after 15s.
+                UIManager:scheduleIn(15, try_create)
+            else
+                if on_error then on_error(err) end
+            end
+            return
+        end
+        start_polling(task_id)
+    end
+
+    UIManager:scheduleIn(0.5, try_create)
 end
 
 return ImageGenerator
