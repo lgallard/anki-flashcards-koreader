@@ -206,21 +206,29 @@ function CardViewer:init()
 
     local content_widget
 
+    -- Build a scaled ImageWidget that fits inner_w and at most 40% of the
+    -- content area height, preserving the 16:9 generated image ratio.
+    local function make_image_widget(image_path)
+        if not image_path or image_path == "" then return nil, 0 end
+        local natural_h = math.floor(inner_w * 9 / 16)
+        local max_h     = math.floor(total_content_h * 0.40)
+        local img_h     = math.min(natural_h, max_h)
+        -- If height was capped, reduce width proportionally to stay in ratio.
+        local img_w     = (img_h == natural_h) and inner_w
+                          or math.floor(img_h * 16 / 9)
+        local w = ImageWidget:new {
+            file         = image_path,
+            width        = img_w,
+            height       = img_h,
+            scale_factor = 0,   -- scale to fit bounding box, maintain ratio
+        }
+        return w, img_h
+    end
+
     if not self.show_back then
         -- ── FRONT: optional image + centred phrase + IPA ──────────────────────
         local image_path = self.card and self.card.image_path
-        local image_h    = 0
-        local img_widget = nil
-
-        if image_path and image_path ~= "" then
-            image_h = math.floor(inner_w * 9 / 16)
-            img_widget = ImageWidget:new {
-                file         = image_path,
-                width        = inner_w,
-                height       = image_h,
-                scale_factor = 0,
-            }
-        end
+        local img_widget, image_h = make_image_widget(image_path)
 
         local front_face = Font:getFace("smallinfofont")
         local gap        = img_widget and Size.padding.default or 0
@@ -249,18 +257,7 @@ function CardViewer:init()
     else
         -- ── BACK: optional image + all fields ────────────────────────────────
         local image_path = self.card and self.card.image_path
-        local image_h    = 0
-        local img_widget = nil
-
-        if image_path then
-            image_h = math.floor(inner_w * 9 / 16)  -- 16:9
-            img_widget = ImageWidget:new {
-                file         = image_path,
-                width        = inner_w,
-                height       = image_h,
-                scale_factor = 0,  -- don't upscale beyond original size
-            }
-        end
+        local img_widget, image_h = make_image_widget(image_path)
 
         local text_face  = Font:getFace("xx_smallinfofont")
         local gap        = img_widget and Size.padding.default or 0
