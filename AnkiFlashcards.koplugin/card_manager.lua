@@ -141,17 +141,28 @@ function CardManager.show(base_config)
                                 text     = _("View"),
                                 callback = function()
                                     UIManager:close(dialog)
-                                    local viewer = CardViewer:new {
-                                        card      = card,
-                                        read_only = true,
-                                        on_save   = function()
-                                            return nil, _("Already saved")
-                                        end,
-                                        on_send   = function()
-                                            return AnkiSync.send_card(anki_config, card)
-                                        end,
-                                    }
-                                    UIManager:show(viewer)
+                                    local viewer_ref = {}
+                                    local function make_viewer(show_back)
+                                        local v
+                                        v = CardViewer:new {
+                                            card      = card,
+                                            show_back = show_back,
+                                            read_only = true,
+                                            on_show_answer = function()
+                                                UIManager:close(v)
+                                                viewer_ref[1] = make_viewer(true)
+                                            end,
+                                            on_save = function()
+                                                return nil, _("Already saved")
+                                            end,
+                                            on_send = function()
+                                                return AnkiSync.send_card(anki_config, card)
+                                            end,
+                                        }
+                                        UIManager:show(v)
+                                        return v
+                                    end
+                                    viewer_ref[1] = make_viewer(false)
                                 end,
                             },
                             {
