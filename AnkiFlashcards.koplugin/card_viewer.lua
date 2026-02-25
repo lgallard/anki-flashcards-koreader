@@ -46,7 +46,8 @@ local function blank_cloze(text)
 end
 
 local function reveal_cloze(text)
-    return (text or ""):gsub("{{c%d+::(.-)}}",  "%1")
+    return (text or ""):gsub("{{c%d+::(.-)}}",
+        PTF_BOLD_START .. "%1" .. PTF_BOLD_END)
 end
 
 -- Colors for special fields (tuned for e-ink visibility).
