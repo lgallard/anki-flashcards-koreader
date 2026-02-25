@@ -267,7 +267,7 @@ function CardViewer:init()
         -- ── BACK ──────────────────────────────────────────────────────────────
         -- Layout (top→bottom): Definition+Phrase · Image · IPA (red) · Cloze (revealed)
         local c          = self.card or {}
-        local face       = Font:getFace("xx_smallinfofont")
+        local face       = Font:getFace("smallinfofont")
         local img_widget, image_h = make_image_widget(c.image_path)
         local n_gaps     = img_widget and 4 or 3
         local text_h     = avail_h - image_h - n_gaps * gap
