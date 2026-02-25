@@ -79,6 +79,26 @@ function CardStorage.update_image_path(phrase, path)
     return false
 end
 
+-- Update editable fields of an already-saved card (matched by original phrase).
+-- Does not touch book metadata, image_path, date or sent_to_anki.
+function CardStorage.update_card(original_phrase, new_card)
+    local key     = normalize(original_phrase)
+    local entries = load_raw()
+    for _, e in ipairs(entries) do
+        if normalize(e.phrase) == key then
+            e.phrase     = new_card.phrase     or ""
+            e.ipa        = new_card.ipa        or ""
+            e.definition = new_card.definition or ""
+            e.synonyms   = new_card.synonyms   or ""
+            e.text       = new_card.text       or ""
+            e.source     = new_card.source     or ""
+            save_raw(entries)
+            return true
+        end
+    end
+    return false
+end
+
 -- Remove card by 1-based index; also deletes its image file if present.
 function CardStorage.delete_card(idx)
     local entries = load_raw()

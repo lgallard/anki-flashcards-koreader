@@ -75,6 +75,7 @@ local CardViewer = InputContainer:extend {
     on_save        = nil,   -- function() -> true | nil, err
     on_send        = nil,   -- function() -> true | nil, err
     on_regenerate  = nil,   -- function()
+    on_update      = nil,   -- function(card) — called after a field edit (to persist)
     read_only      = false,
 
     text_padding   = Size.padding.large,
@@ -174,12 +175,10 @@ function CardViewer:init()
             end,
         })
 
-        if not self.read_only then
+        if not self.read_only and self.on_regenerate then
             table.insert(buttons_row, {
                 text     = _("↻"),
-                callback = function()
-                    if self.on_regenerate then self.on_regenerate() end
-                end,
+                callback = function() self.on_regenerate() end,
             })
         end
 
@@ -384,6 +383,7 @@ function CardViewer:editField(field_def)
                     local new_val = input_dlg:getInputText() or ""
                     UIManager:close(input_dlg)
                     self.card[field_def.key] = new_val
+                    if self.on_update then self.on_update(self.card) end
                     self:update()
                 end,
             },
@@ -408,6 +408,7 @@ function CardViewer:update(new_card, new_show_back)
         on_save        = self.on_save,
         on_send        = self.on_send,
         on_regenerate  = self.on_regenerate,
+        on_update      = self.on_update,
         read_only      = self.read_only,
     }
     UIManager:show(updated)

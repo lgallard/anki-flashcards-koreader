@@ -129,76 +129,82 @@ function CardManager.show(base_config)
                        .. (card.phrase or "") .. "  —  "
                        .. book .. "  (" .. (card.date or "") .. ")"
 
-        table.insert(item_table, {
-            text = label,
-            callback = function()
-                local dialog
-                dialog = ButtonDialog:new {
-                    title   = card.phrase or "",
-                    buttons = {
-                        {
-                            {
-                                text     = _("View"),
-                                callback = function()
-                                    UIManager:close(dialog)
-                                    local viewer_ref = {}
-                                    local function make_viewer(show_back)
-                                        local v
-                                        v = CardViewer:new {
-                                            card      = card,
-                                            show_back = show_back,
-                                            read_only = true,
-                                            on_show_answer = function()
-                                                UIManager:close(v)
-                                                viewer_ref[1] = make_viewer(true)
-                                            end,
-                                            on_save = function()
-                                                return nil, _("Already saved")
-                                            end,
-                                            on_send = function()
-                                                return AnkiSync.send_card(anki_config, card)
-                                            end,
-                                        }
-                                        UIManager:show(v)
-                                        return v
-                                    end
-                                    viewer_ref[1] = make_viewer(false)
-                                end,
-                            },
-                            {
-                                text     = _("Send to Anki"),
-                                callback = function()
-                                    UIManager:close(dialog)
-                                    if send_one(card) then
-                                        notify(_("Sent!"))
-                                        refresh()
-                                    end
-                                end,
-                            },
-                            {
-                                text     = _("Delete"),
-                                callback = function()
-                                    UIManager:close(dialog)
-                                    UIManager:show(ConfirmBox:new {
-                                        text        = _("Delete '")
-                                                      .. (card.phrase or "") .. _("'?"),
-                                        ok_text     = _("Delete"),
-                                        ok_callback = function()
-                                            CardStorage.delete_card(idx)
-                                            refresh()
-                                        end,
-                                    })
-                                end,
-                            },
-                        },
-                        {{
-                            text     = _("Cancel"),
-                            callback = function() UIManager:close(dialog) end,
-                        }},
-                    },
+        -- Tap: open card viewer directly.
+        local function open_viewer()
+            local viewer_ref = {}
+            -- Track original phrase so renames can still find the record.
+            local card_ref   = { phrase = card.phrase }
+            local function make_viewer(show_back)
+                local v
+                v = CardViewer:new {
+                    card      = card,
+                    show_back = show_back,
+                    read_only = false,
+                    on_show_answer = function()
+                        UIManager:close(v)
+                        viewer_ref[1] = make_viewer(true)
+                    end,
+                    on_save = function()
+                        return nil, _("Already saved")
+                    end,
+                    on_send = function()
+                        return AnkiSync.send_card(anki_config, card)
+                    end,
+                    on_update = function(updated_card)
+                        CardStorage.update_card(card_ref.phrase, updated_card)
+                        card_ref.phrase = updated_card.phrase
+                    end,
                 }
-                UIManager:show(dialog)
-            end,
+                UIManager:show(v)
+                return v
+            end
+            viewer_ref[1] = make_viewer(false)
+        end
+
+        -- Hold: contextual menu with Send / Delete.
+        local function open_context_menu()
+            local dialog
+            dialog = ButtonDialog:new {
+                title   = card.phrase or "",
+                buttons = {
+                    {{
+                        text     = _("Send to Anki"),
+                        callback = function()
+                            UIManager:close(dialog)
+                            if send_one(card) then
+                                notify(_("Sent!"))
+                                refresh()
+                            end
+                        end,
+                    }},
+                    {{
+                        text     = _("Delete"),
+                        callback = function()
+                            UIManager:close(dialog)
+                            UIManager:show(ConfirmBox:new {
+                                text        = _("Delete '")
+                                              .. (card.phrase or "") .. _("'?"),
+                                ok_text     = _("Delete"),
+                                ok_callback = function()
+                                    CardStorage.delete_card(idx)
+                                    refresh()
+                                end,
+                            })
+                        end,
+                    }},
+                    {{
+                        text     = _("Cancel"),
+                        callback = function() UIManager:close(dialog) end,
+                    }},
+                },
+            }
+            UIManager:show(dialog)
+        end
+
+        table.insert(item_table, {
+            text          = label,
+            callback      = open_viewer,
+            hold_callback = open_context_menu,
         })
     end
 
