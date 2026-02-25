@@ -32,6 +32,7 @@ local _                = require("gettext")
 
 local Screen = Device.screen
 
+local PTF_HEADER     = "\xEF\xBF\xB1"  -- U+FFF1  required prefix to activate PTF parsing
 local PTF_BOLD_START = "\xEF\xBF\xB2"  -- U+FFF2
 local PTF_BOLD_END   = "\xEF\xBF\xB3"  -- U+FFF3
 
@@ -224,7 +225,7 @@ function CardViewer:init()
     -- w overrides the default inner_w (used for multi-column layouts).
     local function make_text(text, face, height, color, align, justified, w)
         return ScrollTextWidget:new {
-            text      = text or "",
+            text      = PTF_HEADER .. (text or ""),  -- header activates PTF bold parsing
             face      = face,
             fgcolor   = color,
             width     = w or inner_w,
