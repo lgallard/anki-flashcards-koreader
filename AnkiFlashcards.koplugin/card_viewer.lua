@@ -382,9 +382,13 @@ function CardViewer:editField(field_def)
                 callback         = function()
                     local new_val = input_dlg:getInputText() or ""
                     UIManager:close(input_dlg)
-                    self.card[field_def.key] = new_val
-                    if self.on_update then self.on_update(self.card) end
-                    self:update()
+                    -- Defer widget-tree changes until after the current
+                    -- event cycle completes (avoids crash mid-callback).
+                    UIManager:scheduleIn(0, function()
+                        self.card[field_def.key] = new_val
+                        if self.on_update then self.on_update(self.card) end
+                        self:update()
+                    end)
                 end,
             },
         }},

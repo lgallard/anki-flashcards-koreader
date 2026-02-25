@@ -215,9 +215,11 @@ function CardManager.show(base_config)
     menu_instance = Menu:new {
         title        = _("📚 Anki Cards (") .. count_label .. ")",
         item_table   = item_table,
-        -- Critical: colon-call convention so `self` is the menu instance.
         onMenuChoice = function(self, item)
             if item and item.callback then item.callback() end
+        end,
+        onMenuHold = function(self, item)
+            if item and item.hold_callback then item.hold_callback() end
         end,
         show_parent  = UIManager,
     }
