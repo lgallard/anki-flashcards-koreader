@@ -41,35 +41,16 @@ end
 -- ── Content formatters ────────────────────────────────────────────────────────
 
 local function blank_cloze(text)
-    -- Replace {{c1::phrase}} with [___]
     return (text or ""):gsub("{{c%d+::(.-)}}",  "[___]")
 end
 
 local function reveal_cloze(text)
-    -- Replace {{c1::phrase}} with the phrase itself
     return (text or ""):gsub("{{c%d+::(.-)}}",  "%1")
 end
 
-local function format_front(card)
-    local c = card or {}
-    local parts = {}
-    local cloze = blank_cloze(c.text or "")
-    if cloze ~= "" then table.insert(parts, cloze) end
-    if (c.synonyms or "") ~= "" then table.insert(parts, c.synonyms) end
-    return table.concat(parts, "\n\n")
-end
-
-local function format_back(card)
-    local c = card or {}
-    local lines = {}
-    if (c.phrase     or "") ~= "" then table.insert(lines, ptf_bold(c.phrase)) end
-    if (c.ipa        or "") ~= "" then table.insert(lines, c.ipa) end
-    if (c.definition or "") ~= "" then table.insert(lines, c.definition) end
-    if (c.synonyms   or "") ~= "" then table.insert(lines, c.synonyms) end
-    if (c.text       or "") ~= "" then local r = reveal_cloze(c.text); table.insert(lines, r) end
-    if (c.source     or "") ~= "" then table.insert(lines, c.source) end
-    return table.concat(lines, "\n\n")
-end
+-- Colors for special fields.
+local COLOR_ORANGE = Blitbuffer.colorFromRGB(0xFF, 0x8C, 0x00)  -- synonyms
+local COLOR_RED    = Blitbuffer.colorFromRGB(0xCC, 0x00, 0x00)  -- IPA
 
 -- Fields available for editing (shown on back only).
 local EDITABLE_FIELDS = {
@@ -219,83 +200,104 @@ function CardViewer:init()
 
     local content_widget
 
-    -- Build a scaled ImageWidget that fits inner_w and at most 40% of the
-    -- content area height, preserving the 16:9 generated image ratio.
+    -- Build a scaled ImageWidget (16:9, max 40% of content height).
     local function make_image_widget(image_path)
         if not image_path or image_path == "" then return nil, 0 end
         local natural_h = math.floor(inner_w * 9 / 16)
         local max_h     = math.floor(total_content_h * 0.40)
         local img_h     = math.min(natural_h, max_h)
-        -- If height was capped, reduce width proportionally to stay in ratio.
         local img_w     = (img_h == natural_h) and inner_w
                           or math.floor(img_h * 16 / 9)
-        local w = ImageWidget:new {
+        return ImageWidget:new {
             file         = image_path,
             width        = img_w,
             height       = img_h,
-            scale_factor = 0,   -- scale to fit bounding box, maintain ratio
-        }
-        return w, img_h
+            scale_factor = 0,
+        }, img_h
     end
 
+    -- Build a ScrollTextWidget for one content section.
+    local function make_text(text, face, height, color, align)
+        local w = ScrollTextWidget:new {
+            text      = text or "",
+            face      = face,
+            fgcolor   = color,
+            width     = inner_w,
+            height    = math.max(1, height),
+            dialog    = self,
+            alignment = align or "center",
+            justified = false,
+        }
+        return w
+    end
+
+    local gap = Size.padding.default
+    -- Available height for all content widgets (inside the frame's padding/margin).
+    local avail_h = total_content_h - 2 * self.text_padding - 2 * self.text_margin
+
     if not self.show_back then
-        -- ── FRONT: optional image + centred phrase + IPA ──────────────────────
-        local image_path = self.card and self.card.image_path
-        local img_widget, image_h = make_image_widget(image_path)
+        -- ── FRONT ─────────────────────────────────────────────────────────────
+        -- Layout (top→bottom): Definition · Synonyms (orange) · Image · Cloze (blanked)
+        local c          = self.card or {}
+        local face       = Font:getFace("smallinfofont")
+        local img_widget, image_h = make_image_widget(c.image_path)
+        local n_gaps     = img_widget and 3 or 2
+        local text_h     = avail_h - image_h - n_gaps * gap
+        local def_h      = math.max(1, math.floor(text_h * 0.30))
+        local syn_h      = math.max(1, math.floor(text_h * 0.20))
+        local cloze_h    = math.max(1, text_h - def_h - syn_h)
 
-        local front_face = Font:getFace("smallinfofont")
-        local gap        = img_widget and Size.padding.default or 0
-        local scroll_h   = total_content_h
-                         - 2 * self.text_padding - 2 * self.text_margin
-                         - image_h - gap
-        self.scroll_text_w = ScrollTextWidget:new {
-            text      = format_front(self.card),
-            face      = front_face,
-            width     = inner_w,
-            height    = math.max(1, scroll_h),
-            dialog    = self,
-            alignment = "center",
-            justified = false,
-        }
+        local def_w   = make_text(c.definition or "",       face, def_h)
+        local syn_w   = make_text(c.synonyms   or "",       face, syn_h,  COLOR_ORANGE)
+        local cloze_w = make_text(blank_cloze(c.text or ""), face, cloze_h)
+        self.scroll_text_w = cloze_w
 
+        local items = { def_w, VerticalSpan:new{height=gap}, syn_w }
         if img_widget then
-            content_widget = VerticalGroup:new {
-                img_widget,
-                VerticalSpan:new { height = gap },
-                self.scroll_text_w,
-            }
-        else
-            content_widget = self.scroll_text_w
+            table.insert(items, VerticalSpan:new{height=gap})
+            table.insert(items, img_widget)
         end
+        table.insert(items, VerticalSpan:new{height=gap})
+        table.insert(items, cloze_w)
+        content_widget = VerticalGroup:new(items)
+
     else
-        -- ── BACK: optional image + all fields ────────────────────────────────
-        local image_path = self.card and self.card.image_path
-        local img_widget, image_h = make_image_widget(image_path)
+        -- ── BACK ──────────────────────────────────────────────────────────────
+        -- Layout (top→bottom): Definition+Phrase · Image · IPA (red) · Cloze (revealed)
+        local c          = self.card or {}
+        local face       = Font:getFace("xx_smallinfofont")
+        local img_widget, image_h = make_image_widget(c.image_path)
+        local n_gaps     = img_widget and 3 or 2
+        local text_h     = avail_h - image_h - n_gaps * gap
+        local def_h      = math.max(1, math.floor(text_h * 0.35))
+        local ipa_h      = math.max(1, math.floor(text_h * 0.15))
+        local cloze_h    = math.max(1, text_h - def_h - ipa_h)
 
-        local text_face  = Font:getFace("xx_smallinfofont")
-        local gap        = img_widget and Size.padding.default or 0
-        local scroll_h   = total_content_h
-                         - 2 * self.text_padding - 2 * self.text_margin
-                         - image_h - gap
-        self.scroll_text_w = ScrollTextWidget:new {
-            text      = format_back(self.card),
-            face      = text_face,
-            width     = inner_w,
-            height    = math.max(1, scroll_h),
-            dialog    = self,
-            alignment = "left",
-            justified = false,
-        }
-
-        if img_widget then
-            content_widget = VerticalGroup:new {
-                img_widget,
-                VerticalSpan:new { height = gap },
-                self.scroll_text_w,
-            }
+        -- Definition line: bold phrase + newline + definition text.
+        local def_text
+        if (c.phrase or "") ~= "" and (c.definition or "") ~= "" then
+            def_text = ptf_bold(c.phrase) .. "\n" .. c.definition
+        elseif (c.phrase or "") ~= "" then
+            def_text = ptf_bold(c.phrase)
         else
-            content_widget = self.scroll_text_w
+            def_text = c.definition or ""
         end
+
+        local def_w   = make_text(def_text,                   face, def_h)
+        local ipa_w   = make_text(c.ipa or "",                face, ipa_h,   COLOR_RED)
+        local cloze_w = make_text(reveal_cloze(c.text or ""), face, cloze_h)
+        self.scroll_text_w = cloze_w
+
+        local items = { def_w }
+        if img_widget then
+            table.insert(items, VerticalSpan:new{height=gap})
+            table.insert(items, img_widget)
+        end
+        table.insert(items, VerticalSpan:new{height=gap})
+        table.insert(items, ipa_w)
+        table.insert(items, VerticalSpan:new{height=gap})
+        table.insert(items, cloze_w)
+        content_widget = VerticalGroup:new(items)
     end
 
     self.textw = FrameContainer:new {

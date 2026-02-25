@@ -27,6 +27,23 @@ local TIMEOUT = 5  -- fail fast on offline/unreachable host
 
 local AnkiSync = {}
 
+-- Build the Anki deck name for a card.
+-- Uses English::<book_title> when book_title is present, preserving the
+-- top-level deck configured by the user (e.g. "English" from "English::Koreader").
+-- Falls back to config.deck or "English::Koreader" when no title is available.
+local function build_deck_name(config, card)
+    local base = (config and config.deck and config.deck ~= "")
+                 and config.deck or "English::Koreader"
+    local title = card and card.book_title and card.book_title ~= "" and card.book_title
+    if not title then return base end
+    -- Replace colons (Anki hierarchy separator) and trim.
+    local safe = title:gsub(":", " -"):match("^%s*(.-)%s*$")
+    if safe == "" then return base end
+    -- Derive the top-level deck (everything before the first "::").
+    local parent = base:match("^([^:]+)") or base
+    return parent .. "::" .. safe
+end
+
 local function post(url, action, params)
     local body     = json.encode({ action = action, version = 6, params = params or {} })
     local response = {}
@@ -110,7 +127,7 @@ function AnkiSync.send_card(config, card)
     end
 
     local note = {
-        deckName  = config.deck or "English::Koreader",
+        deckName  = build_deck_name(config, card),
         modelName = model,
         fields    = fields,
         options   = {

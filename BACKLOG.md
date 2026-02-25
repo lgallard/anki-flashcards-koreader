@@ -56,16 +56,11 @@ The plugin's goal is to make the highlight→flashcard pipeline as frictionless 
 
 ### Tier 1 — Quick Wins
 
-#### 4. Deck Per Book
-
-**Priority:** High — Trivial effort
+#### ✅ 4. Deck Per Book
 
 Automatically route cards to a deck named after the current book: `English::<book_title>` instead of the fixed `English::Koreader` deck.
 
-- `book_title` is already stored on every card (`card.book_title`)
-- Change `config.deck` fallback in `anki_sync.lua`: use `card.book_title` when available
-- Sanitise the title (strip special chars) to produce a valid Anki deck name
-- Example: reading *The Power of Habit* → cards go to `English::The Power of Habit`
+`anki_sync.lua` — `build_deck_name(config, card)` derives the top-level parent from `config.deck` and appends `::<book_title>` (colon-sanitised). Falls back to `config.deck or "English::Koreader"` when no title is present.
 
 ---
 
@@ -97,18 +92,11 @@ When the Kobo connects to WiFi (e.g., for sync or browsing), silently flush all 
 
 ### Tier 2 — Core Experience Upgrade
 
-#### 7. Highlight Inbox — Batch Card Creation
+#### ✅ 7. Highlight Inbox — Batch Card Creation
 
-**Priority:** High — Medium effort
+Browse all highlights from the current book and select which ones to convert to flashcards.
 
-Browse all highlights from the current book and select which ones to convert to flashcards. Replaces the interruptive one-by-one generation flow with a focused end-of-chapter batch session.
-
-- Access KOReader's highlight database (`ui/widget/bookstatuswidget` or the reader's highlight API)
-- Show a scrollable list of all highlights for the current book
-- User taps to select/deselect highlights
-- Tap "Generate Selected" → AI generates cards sequentially with a progress indicator
-- Already-carded highlights are marked (greyed out or checkmarked)
-- Respects reading flow: no interruption mid-sentence
+`highlight_inbox.lua` — reads `ui.annotation.annotations` (filters by `ann.drawer`), shows a scrollable Menu with ☐/☑/✓ prefixes. "▶ Generate Selected (N)" button runs sequential AI generation via `UIManager:scheduleIn` with live progress notification. Already-carded highlights shown with ✓ and non-tappable. Entry point: "📥 Highlight Inbox" added as Entry 3 in the highlight dialog.
 
 ---
 

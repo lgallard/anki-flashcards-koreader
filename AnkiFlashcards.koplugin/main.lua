@@ -17,6 +17,7 @@ local CardViewer       = require("card_viewer")
 local CardStorage      = require("card_storage")
 local AnkiSync         = require("anki_sync")
 local CardManager      = require("card_manager")
+local HighlightInbox   = require("highlight_inbox")
 local ImageGenerator   = require("image_generator")
 
 local MAX_HL    = 2000
@@ -298,6 +299,18 @@ function AnkiFlashcards:init()
             callback = function()
                 self.ui.highlight:onClose()
                 CardManager.show(CONFIGURATION and CONFIGURATION.anki)
+            end,
+        }
+    end)
+
+    -- ── Entry 3: 📥 Highlight Inbox ───────────────────────────────────────────
+    self.ui.highlight:addToHighlightDialog("ankiflashcards_3", function(_rhi)
+        return {
+            text     = _("📥 Highlight Inbox"),
+            enabled  = true,
+            callback = function()
+                self.ui.highlight:onClose()
+                HighlightInbox.show(self.ui, CONFIGURATION)
             end,
         }
     end)
