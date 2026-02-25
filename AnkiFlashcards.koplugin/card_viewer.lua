@@ -49,9 +49,8 @@ local function reveal_cloze(text)
 end
 
 -- Colors for special fields (tuned for e-ink visibility).
-local COLOR_ORANGE = Blitbuffer.ColorRGB32(0xC0, 0x58, 0x00, 0xFF)  -- synonyms: burnt orange
+local COLOR_ORANGE = Blitbuffer.ColorRGB32(0x7A, 0x35, 0x00, 0xFF)  -- synonyms: very dark orange
 local COLOR_RED    = Blitbuffer.ColorRGB32(0xBB, 0x00, 0x00, 0xFF)  -- IPA: deep red
-local COLOR_CYAN   = Blitbuffer.ColorRGB32(0x00, 0x6A, 0xA8, 0xFF)  -- phrase (back): steel blue
 
 -- Fields available for editing (shown on back only).
 local EDITABLE_FIELDS = {
@@ -265,24 +264,30 @@ function CardViewer:init()
 
     else
         -- ── BACK ──────────────────────────────────────────────────────────────
-        -- Layout (top→bottom): Definition+Phrase · Image · IPA (red) · Cloze (revealed)
+        -- Layout (top→bottom): bold-Phrase + Definition · Image · IPA (red) · Cloze (revealed)
         local c          = self.card or {}
         local face       = Font:getFace("smallinfofont")
         local img_widget, image_h = make_image_widget(c.image_path)
-        local n_gaps     = img_widget and 4 or 3
+        local n_gaps     = img_widget and 3 or 2
         local text_h     = avail_h - image_h - n_gaps * gap
-        local phrase_h   = math.max(1, math.floor(text_h * 0.12))
-        local def_h      = math.max(1, math.floor(text_h * 0.28))
-        local ipa_h      = math.max(1, math.floor(text_h * 0.10))
-        local cloze_h    = math.max(1, text_h - phrase_h - def_h - ipa_h)
+        local def_h      = math.max(1, math.floor(text_h * 0.38))
+        local ipa_h      = math.max(1, math.floor(text_h * 0.12))
+        local cloze_h    = math.max(1, text_h - def_h - ipa_h)
 
-        local phrase_w = make_text(ptf_bold(c.phrase or ""),       face, phrase_h, COLOR_CYAN)
-        local def_w    = make_text(c.definition or "",             face, def_h,    nil,       nil, true)
-        local ipa_w    = make_text(ptf_bold(c.ipa or ""),          face, ipa_h,    COLOR_RED)
-        local cloze_w  = make_text(reveal_cloze(c.text or ""),     face, cloze_h)
+        -- Phrase (bold) + definition on the same line, justified.
+        local def_text
+        if (c.phrase or "") ~= "" then
+            def_text = ptf_bold(c.phrase) .. " " .. (c.definition or "")
+        else
+            def_text = c.definition or ""
+        end
+
+        local def_w   = make_text(def_text,                    face, def_h,   nil,       nil, true)
+        local ipa_w   = make_text(ptf_bold(c.ipa or ""),       face, ipa_h,   COLOR_RED)
+        local cloze_w = make_text(reveal_cloze(c.text or ""), face, cloze_h)
         self.scroll_text_w = cloze_w
 
-        local items = { phrase_w, VerticalSpan:new{height=gap}, def_w }
+        local items = { def_w }
         if img_widget then
             table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
