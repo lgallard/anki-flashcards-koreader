@@ -41,17 +41,17 @@ end
 -- ── Content formatters ────────────────────────────────────────────────────────
 
 local function blank_cloze(text)
-    return (text or ""):gsub("{{c%d+::(.-)}}",  "[___]")
+    return (text or ""):gsub("{{c%d+::(.-)}}",  "[...]")
 end
 
 local function reveal_cloze(text)
     return (text or ""):gsub("{{c%d+::(.-)}}",  "%1")
 end
 
--- Colors for special fields.
-local COLOR_ORANGE = Blitbuffer.ColorRGB32(0xFF, 0x8C, 0x00, 0xFF)  -- synonyms
-local COLOR_RED    = Blitbuffer.ColorRGB32(0xCC, 0x00, 0x00, 0xFF)  -- IPA
-local COLOR_CYAN   = Blitbuffer.ColorRGB32(0x00, 0xBF, 0xFF, 0xFF)  -- phrase (back)
+-- Colors for special fields (tuned for e-ink visibility).
+local COLOR_ORANGE = Blitbuffer.ColorRGB32(0xC0, 0x58, 0x00, 0xFF)  -- synonyms: burnt orange
+local COLOR_RED    = Blitbuffer.ColorRGB32(0xBB, 0x00, 0x00, 0xFF)  -- IPA: deep red
+local COLOR_CYAN   = Blitbuffer.ColorRGB32(0x00, 0x6A, 0xA8, 0xFF)  -- phrase (back): steel blue
 
 -- Fields available for editing (shown on back only).
 local EDITABLE_FIELDS = {
