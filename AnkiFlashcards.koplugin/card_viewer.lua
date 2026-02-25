@@ -266,35 +266,30 @@ function CardViewer:init()
 
     else
         -- ── BACK ──────────────────────────────────────────────────────────────
-        -- Layout (top→bottom): [phrase col | definition col] · Image · IPA (red) · Cloze
-        -- Two-column table trick: HorizontalGroup gives inline phrase+definition
-        -- with independent colors, like an HTML table with hidden borders.
+        -- Layout (top→bottom): Definition · Image · Phrase (blue) · IPA (red) · Cloze
         local c          = self.card or {}
         local face       = Font:getFace("smallinfofont")
         local img_widget, image_h = make_image_widget(c.image_path)
-        local n_gaps     = img_widget and 3 or 2
+        local n_gaps     = img_widget and 4 or 3
         local text_h     = avail_h - image_h - n_gaps * gap
-        local def_h      = math.max(1, math.floor(text_h * 0.40))
-        local ipa_h      = math.max(1, math.floor(text_h * 0.12))
-        local cloze_h    = math.max(1, text_h - def_h - ipa_h)
+        local def_h      = math.max(1, math.floor(text_h * 0.30))
+        local phrase_h   = math.max(1, math.floor(text_h * 0.12))
+        local ipa_h      = math.max(1, math.floor(text_h * 0.10))
+        local cloze_h    = math.max(1, text_h - def_h - phrase_h - ipa_h)
 
-        -- Left column: phrase (bold, dark blue, 35% width).
-        -- Right column: definition (left-aligned, remaining 65%).
-        local phrase_col_w = math.floor(inner_w * 0.35)
-        local def_col_w    = inner_w - phrase_col_w
-        local phrase_w = make_text(ptf_bold(c.phrase or ""), face, def_h, COLOR_BLUE, "left", false, phrase_col_w)
-        local def_w    = make_text(c.definition or "",       face, def_h, nil,        "left", false, def_col_w)
-        local def_row  = HorizontalGroup:new { phrase_w, def_w }
-
-        local ipa_w   = make_text(ptf_bold(c.ipa or ""),       face, ipa_h,   COLOR_RED)
-        local cloze_w = make_text(reveal_cloze(c.text or ""), face, cloze_h)
+        local def_w    = make_text(c.definition or "",          face, def_h,    nil,        "left")
+        local phrase_w = make_text(ptf_bold(c.phrase or ""),    face, phrase_h, COLOR_BLUE)
+        local ipa_w    = make_text(ptf_bold(c.ipa or ""),       face, ipa_h,    COLOR_RED)
+        local cloze_w  = make_text(reveal_cloze(c.text or ""), face, cloze_h)
         self.scroll_text_w = cloze_w
 
-        local items = { def_row }
+        local items = { def_w }
         if img_widget then
             table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
         end
+        table.insert(items, VerticalSpan:new{height=gap})
+        table.insert(items, phrase_w)
         table.insert(items, VerticalSpan:new{height=gap})
         table.insert(items, ipa_w)
         table.insert(items, VerticalSpan:new{height=gap})
