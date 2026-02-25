@@ -49,8 +49,8 @@ local function reveal_cloze(text)
 end
 
 -- Colors for special fields.
-local COLOR_ORANGE = Blitbuffer.colorFromRGB(0xFF, 0x8C, 0x00)  -- synonyms
-local COLOR_RED    = Blitbuffer.colorFromRGB(0xCC, 0x00, 0x00)  -- IPA
+local COLOR_ORANGE = Blitbuffer.ColorRGB32(0xFF, 0x8C, 0x00, 0xFF)  -- synonyms
+local COLOR_RED    = Blitbuffer.ColorRGB32(0xCC, 0x00, 0x00, 0xFF)  -- IPA
 
 -- Fields available for editing (shown on back only).
 local EDITABLE_FIELDS = {
