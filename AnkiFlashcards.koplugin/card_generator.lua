@@ -19,11 +19,11 @@ Context: "...{context}..."
 
 Return ONLY a valid JSON object, no other text:
 {
-  "phrase": "<phrase as highlighted, all lowercase>",
-  "ipa": "<American English IPA transcription, e.g. /ˈwɜːrd/>",
-  "definition": "<context-aware definition, max 20 words>",
-  "synonyms": "<3-4 synonyms, comma-separated>",
-  "text": "<natural example sentence using the phrase in the SAME meaning but different situation, with {{c1::phrase}} wrapping the key word>",
+  "phrase": "<canonical form of the phrase, all lowercase: (1) use infinitive/base form — e.g. 'crank up' not 'cranked up', 'invite someone over' not 'invited him over'; (2) replace specific pronouns (him, her, them, me, us, it) with 'someone' or 'something' as appropriate>",
+  "ipa": "<American English IPA of the canonical phrase, e.g. /ˈwɜːrd/>",
+  "definition": "<context-aware definition of the canonical phrase, max 20 words>",
+  "synonyms": "<3-4 synonyms for the canonical phrase, comma-separated>",
+  "text": "<natural example sentence in a different situation, using the phrase in the SAME tense/form/pronouns as the original highlighted text '{phrase}', with {{c1::...}} wrapping that exact form>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
