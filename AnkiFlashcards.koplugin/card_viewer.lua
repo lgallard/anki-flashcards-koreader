@@ -51,6 +51,7 @@ end
 -- Colors for special fields.
 local COLOR_ORANGE = Blitbuffer.ColorRGB32(0xFF, 0x8C, 0x00, 0xFF)  -- synonyms
 local COLOR_RED    = Blitbuffer.ColorRGB32(0xCC, 0x00, 0x00, 0xFF)  -- IPA
+local COLOR_CYAN   = Blitbuffer.ColorRGB32(0x00, 0xBF, 0xFF, 0xFF)  -- phrase (back)
 
 -- Fields available for editing (shown on back only).
 local EDITABLE_FIELDS = {
@@ -217,7 +218,8 @@ function CardViewer:init()
     end
 
     -- Build a ScrollTextWidget for one content section.
-    local function make_text(text, face, height, color, align)
+    -- justified=true enables full justification (implies left alignment).
+    local function make_text(text, face, height, color, align, justified)
         local w = ScrollTextWidget:new {
             text      = text or "",
             face      = face,
@@ -225,8 +227,8 @@ function CardViewer:init()
             width     = inner_w,
             height    = math.max(1, height),
             dialog    = self,
-            alignment = align or "center",
-            justified = false,
+            alignment = justified and "left" or (align or "center"),
+            justified = justified or false,
         }
         return w
     end
@@ -247,9 +249,9 @@ function CardViewer:init()
         local syn_h      = math.max(1, math.floor(text_h * 0.20))
         local cloze_h    = math.max(1, text_h - def_h - syn_h)
 
-        local def_w   = make_text(c.definition or "",       face, def_h)
-        local syn_w   = make_text(c.synonyms   or "",       face, syn_h,  COLOR_ORANGE)
-        local cloze_w = make_text(blank_cloze(c.text or ""), face, cloze_h)
+        local def_w   = make_text(c.definition or "",              face, def_h,   nil,          nil,   true)
+        local syn_w   = make_text(ptf_bold(c.synonyms or ""),     face, syn_h,   COLOR_ORANGE)
+        local cloze_w = make_text(blank_cloze(c.text or ""),      face, cloze_h)
         self.scroll_text_w = cloze_w
 
         local items = { def_w, VerticalSpan:new{height=gap}, syn_w }
@@ -267,28 +269,20 @@ function CardViewer:init()
         local c          = self.card or {}
         local face       = Font:getFace("xx_smallinfofont")
         local img_widget, image_h = make_image_widget(c.image_path)
-        local n_gaps     = img_widget and 3 or 2
+        local n_gaps     = img_widget and 4 or 3
         local text_h     = avail_h - image_h - n_gaps * gap
-        local def_h      = math.max(1, math.floor(text_h * 0.35))
-        local ipa_h      = math.max(1, math.floor(text_h * 0.15))
-        local cloze_h    = math.max(1, text_h - def_h - ipa_h)
+        local phrase_h   = math.max(1, math.floor(text_h * 0.12))
+        local def_h      = math.max(1, math.floor(text_h * 0.28))
+        local ipa_h      = math.max(1, math.floor(text_h * 0.10))
+        local cloze_h    = math.max(1, text_h - phrase_h - def_h - ipa_h)
 
-        -- Definition line: bold phrase + newline + definition text.
-        local def_text
-        if (c.phrase or "") ~= "" and (c.definition or "") ~= "" then
-            def_text = ptf_bold(c.phrase) .. "\n" .. c.definition
-        elseif (c.phrase or "") ~= "" then
-            def_text = ptf_bold(c.phrase)
-        else
-            def_text = c.definition or ""
-        end
-
-        local def_w   = make_text(def_text,                   face, def_h)
-        local ipa_w   = make_text(c.ipa or "",                face, ipa_h,   COLOR_RED)
-        local cloze_w = make_text(reveal_cloze(c.text or ""), face, cloze_h)
+        local phrase_w = make_text(ptf_bold(c.phrase or ""),       face, phrase_h, COLOR_CYAN)
+        local def_w    = make_text(c.definition or "",             face, def_h,    nil,       nil, true)
+        local ipa_w    = make_text(ptf_bold(c.ipa or ""),          face, ipa_h,    COLOR_RED)
+        local cloze_w  = make_text(reveal_cloze(c.text or ""),     face, cloze_h)
         self.scroll_text_w = cloze_w
 
-        local items = { def_w }
+        local items = { phrase_w, VerticalSpan:new{height=gap}, def_w }
         if img_widget then
             table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
