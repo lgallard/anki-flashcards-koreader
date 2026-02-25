@@ -19,7 +19,7 @@ Context: "...{context}..."
 
 Return ONLY a valid JSON object, no other text:
 {
-  "phrase": "<phrase as highlighted, title-cased if a single word>",
+  "phrase": "<phrase as highlighted, all lowercase>",
   "ipa": "<American English IPA transcription, e.g. /ˈwɜːrd/>",
   "definition": "<context-aware definition, max 20 words>",
   "synonyms": "<3-4 synonyms, comma-separated>",
@@ -42,6 +42,16 @@ local function parse_response(raw)
     local ok, card = pcall(json.decode, block)
     if not ok then return nil, "JSON parse failed: " .. tostring(card) end
     if type(card) ~= "table" then return nil, "Decoded value is not a table" end
+    -- Normalise phrase to all-lowercase.
+    if type(card.phrase) == "string" then
+        card.phrase = card.phrase:lower()
+    end
+    -- Lowercase the phrase inside {{c1::...}} cloze markers.
+    if type(card.text) == "string" then
+        card.text = card.text:gsub("({{c%d+::)(.-)(}})", function(open, p, close)
+            return open .. p:lower() .. close
+        end)
+    end
     return card
 end
 
