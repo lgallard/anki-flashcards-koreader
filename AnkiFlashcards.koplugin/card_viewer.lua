@@ -51,6 +51,7 @@ end
 -- Colors for special fields (tuned for e-ink visibility).
 local COLOR_ORANGE = Blitbuffer.ColorRGB32(0x7A, 0x35, 0x00, 0xFF)  -- synonyms: very dark orange
 local COLOR_RED    = Blitbuffer.ColorRGB32(0xBB, 0x00, 0x00, 0xFF)  -- IPA: deep red
+local COLOR_BLUE   = Blitbuffer.ColorRGB32(0x00, 0x3A, 0x75, 0xFF)  -- phrase (back): dark navy blue
 
 -- Fields available for editing (shown on back only).
 local EDITABLE_FIELDS = {
@@ -270,24 +271,20 @@ function CardViewer:init()
         local img_widget, image_h = make_image_widget(c.image_path)
         local n_gaps     = img_widget and 3 or 2
         local text_h     = avail_h - image_h - n_gaps * gap
-        local def_h      = math.max(1, math.floor(text_h * 0.38))
+        local phrase_h   = math.max(1, math.floor(text_h * 0.11))
+        local def_h      = math.max(1, math.floor(text_h * 0.27))
         local ipa_h      = math.max(1, math.floor(text_h * 0.12))
-        local cloze_h    = math.max(1, text_h - def_h - ipa_h)
+        local cloze_h    = math.max(1, text_h - phrase_h - def_h - ipa_h)
 
-        -- Phrase (bold) + definition on the same line, justified.
-        local def_text
-        if (c.phrase or "") ~= "" then
-            def_text = ptf_bold(c.phrase) .. " " .. (c.definition or "")
-        else
-            def_text = c.definition or ""
-        end
-
-        local def_w   = make_text(def_text,                    face, def_h,   nil,       nil, true)
-        local ipa_w   = make_text(ptf_bold(c.ipa or ""),       face, ipa_h,   COLOR_RED)
-        local cloze_w = make_text(reveal_cloze(c.text or ""), face, cloze_h)
+        -- Phrase (bold, dark blue) immediately above definition — no gap between them.
+        local phrase_w = make_text(ptf_bold(c.phrase or ""),    face, phrase_h, COLOR_BLUE)
+        local def_w    = make_text(c.definition or "",          face, def_h,    nil, nil, true)
+        local ipa_w    = make_text(ptf_bold(c.ipa or ""),       face, ipa_h,    COLOR_RED)
+        local cloze_w  = make_text(reveal_cloze(c.text or ""), face, cloze_h)
         self.scroll_text_w = cloze_w
 
-        local items = { def_w }
+        -- phrase_w and def_w share the same block with no gap (reads as one section).
+        local items = { phrase_w, def_w }
         if img_widget then
             table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
