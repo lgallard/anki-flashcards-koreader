@@ -57,13 +57,13 @@ local COLOR_RED    = Blitbuffer.ColorRGB32(0xBB, 0x00, 0x00, 0xFF)  -- IPA: deep
 local COLOR_BLUE   = Blitbuffer.ColorRGB32(0x00, 0x3A, 0x75, 0xFF)  -- phrase (back): dark navy blue
 
 -- Fields available for editing (shown on back only).
+-- IPA and Source are intentionally excluded: IPA is auto-regenerated when Phrase changes,
+-- and Source is auto-updated to the Cambridge URL for the new phrase.
 local EDITABLE_FIELDS = {
     { key = "phrase",     label = "Phrase" },
-    { key = "ipa",        label = "IPA" },
     { key = "definition", label = "Definition" },
     { key = "synonyms",   label = "Synonyms" },
     { key = "text",       label = "Text (cloze)" },
-    { key = "source",     label = "Source" },
 }
 
 -- ── Widget ────────────────────────────────────────────────────────────────────
@@ -76,6 +76,7 @@ local CardViewer = InputContainer:extend {
     on_send        = nil,   -- function() -> true | nil, err
     on_regenerate  = nil,   -- function()
     on_update      = nil,   -- function(card) — called after a field edit (to persist)
+    on_regen_ipa   = nil,   -- function(new_phrase, card, new_viewer) — async IPA regen after phrase change
     read_only      = false,
 
     text_padding   = Size.padding.large,
@@ -343,7 +344,7 @@ end
 function CardViewer:showEditDialog()
     local sel_dlg
     local field_buttons = {}
-    for _, f in ipairs(EDITABLE_FIELDS) do
+    for _i, f in ipairs(EDITABLE_FIELDS) do
         local fref = f
         table.insert(field_buttons, {{
             text     = _(fref.label),
@@ -368,10 +369,9 @@ function CardViewer:editField(field_def)
     local current = self.card and self.card[field_def.key] or ""
     local input_dlg
     input_dlg = InputDialog:new {
-        title      = _("Edit: ") .. field_def.label,
-        input      = current,
-        input_type = "text",
-        buttons    = {{
+        title   = _("Edit: ") .. field_def.label,
+        input   = current,
+        buttons = {{
             {
                 text     = _("Cancel"),
                 callback = function() UIManager:close(input_dlg) end,
@@ -385,9 +385,22 @@ function CardViewer:editField(field_def)
                     -- Defer widget-tree changes until after the current
                     -- event cycle completes (avoids crash mid-callback).
                     UIManager:scheduleIn(0, function()
+                        local old_phrase = self.card.phrase
                         self.card[field_def.key] = new_val
+                        -- When phrase changes: auto-update Cambridge source URL,
+                        -- clear stale IPA, then trigger async IPA regeneration.
+                        local phrase_changed = field_def.key == "phrase"
+                                               and new_val ~= old_phrase
+                        if phrase_changed then
+                            self.card.source = "https://dictionary.cambridge.org/dictionary/english/"
+                                               .. new_val:lower():gsub("%s+", "-")
+                            self.card.ipa    = ""
+                        end
                         if self.on_update then self.on_update(self.card) end
-                        self:update()
+                        local new_v = self:update()
+                        if phrase_changed and self.on_regen_ipa then
+                            self.on_regen_ipa(new_val, self.card, new_v)
+                        end
                     end)
                 end,
             },
@@ -413,6 +426,7 @@ function CardViewer:update(new_card, new_show_back)
         on_send        = self.on_send,
         on_regenerate  = self.on_regenerate,
         on_update      = self.on_update,
+        on_regen_ipa   = self.on_regen_ipa,
         read_only      = self.read_only,
     }
     UIManager:show(updated)
@@ -435,6 +449,10 @@ function CardViewer:onShow()
 end
 
 function CardViewer:onTapClose(arg, ges_ev)
+    -- Don't close while any dialog (InputDialog, ButtonDialog, VirtualKeyboard…) is on top.
+    if UIManager:getTopmostVisibleWidget() ~= self then
+        return true
+    end
     if ges_ev.pos:notIntersectWith(self.frame.dimen) then
         self:onClose()
     end

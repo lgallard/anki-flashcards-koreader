@@ -9,7 +9,9 @@ local _              = require("gettext")
 
 local CardStorage    = require("card_storage")
 local AnkiSync       = require("anki_sync")
+local CardGenerator  = require("card_generator")
 local CardViewer     = require("card_viewer")
+local NetworkMgr     = require("ui/network/manager")
 local SettingsViewer = require("settings_viewer")
 
 local CardManager = {}
@@ -18,11 +20,13 @@ local function notify(text)
     UIManager:show(Notification:new { text = text })
 end
 
--- Merge saved settings on top of base_config, returning a fresh table.
+-- Merge saved settings on top of base_config's Anki sub-table, returning a fresh table.
+-- Handles both full CONFIGURATION (with nested .anki) and a flat Anki-only table.
 local function effective_config(base)
     local cfg = {}
-    if base then
-        for k, v in pairs(base) do cfg[k] = v end
+    local anki_base = (base and type(base.anki) == "table") and base.anki or base
+    if anki_base then
+        for k, v in pairs(anki_base) do cfg[k] = v end
     end
     local saved = CardStorage.load_anki_settings()
     if saved then
@@ -154,6 +158,26 @@ function CardManager.show(base_config)
                         CardStorage.update_card(card_ref.phrase, updated_card)
                         card_ref.phrase = updated_card.phrase
                     end,
+                    on_regen_ipa = function(new_phrase, updated_card, new_viewer)
+                        NetworkMgr:runWhenOnline(function()
+                            UIManager:scheduleIn(0.05, function()
+                                local ipa, err = CardGenerator.generate_ipa(base_config, new_phrase)
+                                if ipa then
+                                    updated_card.ipa = ipa
+                                    CardStorage.update_card(updated_card.phrase, updated_card)
+                                    -- Only refresh if the viewer is still on screen.
+                                    local still_shown = false
+                                    for w in UIManager:topdown_widgets_iter() do
+                                        if w == new_viewer then still_shown = true; break end
+                                    end
+                                    if still_shown then new_viewer:update() end
+                                    notify(_("IPA updated"))
+                                else
+                                    notify(_("IPA regen failed: ") .. (err or "unknown"))
+                                end
+                            end)
+                        end)
+                    end,
                 }
                 UIManager:show(v)
                 return v
@@ -215,13 +239,9 @@ function CardManager.show(base_config)
     menu_instance = Menu:new {
         title        = _("📚 Anki Cards (") .. count_label .. ")",
         item_table   = item_table,
-        onMenuChoice = function(self, item)
-            if item and item.callback then item.callback() end
-        end,
         onMenuHold = function(self, item)
             if item and item.hold_callback then item.hold_callback() end
         end,
-        show_parent  = UIManager,
     }
     UIManager:show(menu_instance)
 end

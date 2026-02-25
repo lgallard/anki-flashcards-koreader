@@ -298,7 +298,7 @@ function AnkiFlashcards:init()
             enabled = true,
             callback = function()
                 self.ui.highlight:onClose()
-                CardManager.show(CONFIGURATION and CONFIGURATION.anki)
+                CardManager.show(CONFIGURATION)
             end,
         }
     end)

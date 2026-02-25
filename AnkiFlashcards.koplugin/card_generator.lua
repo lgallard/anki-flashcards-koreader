@@ -121,4 +121,54 @@ function CardGenerator.generate(config, phrase, context, title, author)
     return parse_response(raw_text)
 end
 
+-- Generate IPA only for a given phrase. Returns (ipa_string, nil) or (nil, error).
+function CardGenerator.generate_ipa(config, phrase)
+    local api_key = config and (config.dashscope_api_key or config.api_key) or ""
+    if api_key == "" then return nil, "API key not configured" end
+
+    local prompt = 'Return ONLY the American English IPA for: "'
+                   .. (phrase or "")
+                   .. '"\nReply with just the IPA notation, nothing else. Example: /ɪɡˈzæmpəl/'
+
+    local request_body = json.encode({
+        model    = config.model or "qwen-plus",
+        messages = {{ role = "user", content = prompt }},
+    })
+
+    local headers = {
+        ["Content-Type"]  = "application/json",
+        ["Authorization"] = "Bearer " .. api_key,
+    }
+
+    local provider = config.provider
+    if not provider or provider == "" then
+        provider = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+    end
+
+    local response_body = {}
+    local ok, code = https.request {
+        url     = provider,
+        method  = "POST",
+        headers = headers,
+        source  = ltn12.source.string(request_body),
+        sink    = ltn12.sink.table(response_body),
+    }
+
+    if tostring(code) ~= "200" then
+        return nil, "HTTP " .. tostring(code)
+    end
+
+    local ok2, decoded = pcall(json.decode, table.concat(response_body))
+    if ok2 and decoded
+       and decoded.choices
+       and decoded.choices[1]
+       and decoded.choices[1].message then
+        local ipa = decoded.choices[1].message.content
+        if ipa then
+            return ipa:match("^%s*(.-)%s*$")  -- trim whitespace
+        end
+    end
+    return nil, "Unexpected API response"
+end
+
 return CardGenerator
