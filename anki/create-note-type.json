@@ -1,0 +1,92 @@
+{
+  "action": "createModel",
+  "version": 6,
+  "params": {
+    "modelName": "English",
+    "inOrderFields": [
+      "Phrase",
+      "IPA",
+      "Definition",
+      "Synonyms",
+      "Text",
+      "Source",
+      "ImageFront",
+      "ImageBack"
+    ],
+    "css": "
+.card {
+  font-family: Arial, sans-serif;
+  font-size: 18px;
+  text-align: center;
+  color: #333;
+  background-color: #fff;
+  padding: 20px;
+}
+
+.phrase {
+  font-size: 28px;
+  font-weight: bold;
+  color: #1a73e8;
+  margin-bottom: 8px;
+}
+
+.ipa {
+  font-size: 20px;
+  color: #d93025;
+  margin-bottom: 16px;
+}
+
+.definition {
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.synonyms {
+  font-size: 16px;
+  color: #b35c00;
+  font-weight: bold;
+  margin-bottom: 16px;
+}
+
+.image-container img {
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.cloze {
+  font-size: 17px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.cloze b { color: #1a73e8; }
+
+.source a {
+  font-size: 13px;
+  color: #888;
+  text-decoration: none;
+}
+",
+    "cardTemplates": [
+      {
+        "Name": "Card 1",
+        "Front": "
+<div class=\"definition\">{{Definition}}</div>
+<div class=\"synonyms\">{{Synonyms}}</div>
+<div class=\"image-container\">{{ImageFront}}</div>
+<div class=\"cloze\">{{cloze:Text}}</div>
+",
+        "Back": "
+<div class=\"definition\">{{Definition}}</div>
+<div class=\"image-container\">{{ImageBack}}</div>
+<div class=\"phrase\">{{Phrase}}</div>
+<div class=\"ipa\">{{IPA}}</div>
+<div class=\"cloze\">{{cloze:Text}}</div>
+<div class=\"source\"><a href=\"{{Source}}\">{{Source}}</a></div>
+"
+      }
+    ]
+  }
+}
