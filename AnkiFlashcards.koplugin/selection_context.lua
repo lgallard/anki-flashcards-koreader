@@ -34,8 +34,14 @@ local function selection_to_text(sel)
 end
 
 local function get_page_text(document)
-  return selection_to_text(document:getTextFromPositions({x = 0, y = 0},
-    {x = Screen:getWidth(), y = Screen:getHeight()}, true))
+  local ok, result = pcall(function()
+    return selection_to_text(document:getTextFromPositions(
+      {x = 0, y = 0},
+      {x = Screen:getWidth(), y = Screen:getHeight()},
+      true))
+  end)
+  if ok and result then return result end
+  return ""
 end
 
 function get_selection_in_context2(document, selection, window)
