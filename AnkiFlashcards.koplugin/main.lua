@@ -99,10 +99,10 @@ end
 
 function AnkiFlashcards:init()
 
-    -- ── Entry 1: 📖 Anki Card ─────────────────────────────────────────────────
-    self.ui.highlight:addToHighlightDialog("ankiflashcards_1", function(rhi)
+    -- ── Entry 4: Anki Card (primary action, registered last = bottom) ───────────
+    self.ui.highlight:addToHighlightDialog("ankiflashcards_4", function(rhi)
         return {
-            text    = _("📖 Anki Card"),
+            text    = _("Anki Card"),
             enabled = Device:hasClipboard(),
             callback = function()
                 local ui = self.ui
@@ -291,10 +291,27 @@ function AnkiFlashcards:init()
         }
     end)
 
-    -- ── Entry 2: 📚 My Cards ──────────────────────────────────────────────────
+    -- ── Entry 2: Anki Manage (includes Anki Inbox) ───────────────────────────
     self.ui.highlight:addToHighlightDialog("ankiflashcards_2", function(_rhi)
         return {
-            text    = _("📚 My Cards"),
+            text    = _("Anki Manage"),
+            enabled = true,
+            callback = function()
+                local ui = self.ui
+                self.ui.highlight:onClose()
+                CardManager.show_manage(CONFIGURATION, {
+                    on_inbox = function()
+                        HighlightInbox.show(ui, CONFIGURATION)
+                    end,
+                })
+            end,
+        }
+    end)
+
+    -- ── Entry 3: My Cards ─────────────────────────────────────────────────────
+    self.ui.highlight:addToHighlightDialog("ankiflashcards_3", function(_rhi)
+        return {
+            text    = _("My Cards"),
             enabled = true,
             callback = function()
                 self.ui.highlight:onClose()
@@ -303,17 +320,6 @@ function AnkiFlashcards:init()
         }
     end)
 
-    -- ── Entry 3: 📥 Highlight Inbox ───────────────────────────────────────────
-    self.ui.highlight:addToHighlightDialog("ankiflashcards_3", function(_rhi)
-        return {
-            text     = _("📥 Highlight Inbox"),
-            enabled  = true,
-            callback = function()
-                self.ui.highlight:onClose()
-                HighlightInbox.show(self.ui, CONFIGURATION)
-            end,
-        }
-    end)
 end
 
 return AnkiFlashcards

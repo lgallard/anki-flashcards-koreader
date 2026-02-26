@@ -58,7 +58,7 @@ local function show_menu(ui, config, highlights, already_carded, selected)
 
     -- ▶ Generate Selected ────────────────────────────────────────────────────
     table.insert(items, {
-        text     = _("▶ Generate Selected (") .. tostring(sel_cnt) .. ")",
+        text     = _("Generate Selected (") .. tostring(sel_cnt) .. ")",
         bold     = true,
         callback = function()
             local to_do = {}
@@ -184,9 +184,8 @@ local function show_menu(ui, config, highlights, already_carded, selected)
 
     local total_label = tostring(#highlights) .. _(" highlight(s)")
     local m = Menu:new {
-        title        = _("📥 Highlight Inbox  (") .. total_label .. ")",
-        item_table   = items,
-        show_parent  = UIManager,
+        title      = _("Highlights to Anki Cards  (") .. total_label .. ")",
+        item_table = items,
     }
     menu_ref[1] = m
     UIManager:show(m)
