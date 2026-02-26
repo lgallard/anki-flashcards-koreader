@@ -15,6 +15,10 @@ A KOReader plugin that generates AI-powered Anki flashcards from highlighted tex
 - **Anki Manage** — bulk send unsent cards, stats by book, batch import from all highlights in a book
 - **AnkiConnect integration** — send cards directly to Anki over Wi-Fi, synced to all your devices
 
+## Compatibility
+
+Developed and tested on a **Kobo Libra Colour** running KOReader. Since it uses only standard KOReader APIs, it should work on any device that runs KOReader (other Kobo models, Kindle, PocketBook, Android, etc.), but other devices have not been validated.
+
 ## Requirements
 
 - A Kobo e-reader running [KOReader](https://github.com/koreader/koreader)
