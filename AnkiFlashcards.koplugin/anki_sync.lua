@@ -1,7 +1,7 @@
 -- AnkiConnect HTTP client.
 -- Uses socket.http + ltn12, bundled in KOReader.
--- The AnkiConnect URL must be the Mac's LAN IP (e.g. http://192.168.x.x:8765),
--- not localhost — the Kobo cannot reach the Mac via localhost.
+-- The AnkiConnect URL must be the LAN IP of the device running Anki (e.g. http://192.168.x.x:8765),
+-- not localhost — the Kobo cannot reach the host via localhost.
 
 local http  = require("socket.http")
 local ltn12 = require("ltn12")

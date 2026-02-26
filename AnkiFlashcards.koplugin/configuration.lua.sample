@@ -6,11 +6,11 @@ local CONFIGURATION = {
     model             = "qwen-plus",
 
     -- ── Anki integration ────────────────────────────────────────────────────
-    -- Requires AnkiConnect add-on running on your Mac.
-    -- Use your Mac's LAN IP — not "localhost".
-    -- Note type MUST be "English" (the anki-card-generator note type).
+    -- Requires AnkiConnect add-on running on the same network as your Kobo.
+    -- Use the LAN IP of the device running Anki — not "localhost".
+    -- Note type MUST be "English" (see anki/README.md).
     anki = {
-        url   = "http://192.168.0.62:8765",  -- ← set your Mac's LAN IP
+        url   = "http://YOUR_HOST_IP:8765",  -- ← LAN IP of the device running Anki
         deck  = "English::Koreader",
         model = "English",
         tags  = { "KOReader" },
