@@ -23,8 +23,7 @@ local function base64_encode(data)
     return table.concat(out)
 end
 
-local TIMEOUT       = 10   -- general requests (fail fast on unreachable host)
-local MEDIA_TIMEOUT = 60   -- storeMediaFile sends base64-encoded image payload
+local TIMEOUT = 5  -- fail fast on offline/unreachable host
 
 local AnkiSync = {}
 
@@ -45,10 +44,10 @@ local function build_deck_name(config, card)
     return parent .. "::" .. safe
 end
 
-local function post(url, action, params, timeout)
+local function post(url, action, params)
     local body     = json.encode({ action = action, version = 6, params = params or {} })
     local response = {}
-    http.TIMEOUT = timeout or TIMEOUT
+    http.TIMEOUT = TIMEOUT
     local ok, code = http.request {
         url     = url,
         method  = "POST",
@@ -72,7 +71,7 @@ local function store_media_file(url, filename, b64_data)
     local result, err = post(url, "storeMediaFile", {
         filename = filename,
         data     = b64_data,
-    }, MEDIA_TIMEOUT)
+    })
     if not result then return nil, err end
     if type(result.error) == "string" then return nil, result.error end
     return result.result or filename
