@@ -8,6 +8,7 @@ local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
 local _              = require("gettext")
 
+local AnkiSync       = require("anki_sync")
 local CardStorage    = require("card_storage")
 
 local SettingsViewer = {}
@@ -18,80 +19,6 @@ local FIELDS = {
     { key = "deck", label = "Deck",             hint = "English::Koreader" },
     { key = "tags", label = "Tags (comma-sep)", hint = "KOReader" },
 }
-
--- Scan the local subnet for AnkiConnect on port 8765.
--- Returns "http://IP:8765" on success, or nil + error string.
-local function discover_anki()
-    local socket = require("socket")
-    local http   = require("socket.http")
-    local ltn12  = require("ltn12")
-    local json   = require("json")
-
-    local logger = require("logger")
-
-    -- Get our local IP. The UDP trick returns 0.0.0.0 on KOReader,
-    -- so fall back to parsing Linux network commands.
-    local our_ip
-
-    -- Try: ip route get (most reliable on Linux)
-    local pipe = io.popen("ip -4 route get 8.8.8.8 2>/dev/null")
-    if pipe then
-        local out = pipe:read("*a")
-        pipe:close()
-        our_ip = out:match("src%s+(%d+%.%d+%.%d+%.%d+)")
-    end
-
-    -- Fallback: ifconfig wlan0 / eth0
-    if not our_ip or our_ip == "0.0.0.0" then
-        local pipe2 = io.popen("ifconfig wlan0 2>/dev/null || ifconfig eth0 2>/dev/null")
-        if pipe2 then
-            local out = pipe2:read("*a")
-            pipe2:close()
-            our_ip = out:match("inet%s+(%d+%.%d+%.%d+%.%d+)")
-        end
-    end
-
-    if not our_ip or our_ip == "0.0.0.0" or our_ip == "127.0.0.1" then
-        return nil, "Cannot determine local IP"
-    end
-    logger.dbg("AnkiDiscover: our IP =", our_ip)
-
-    local prefix = our_ip:match("^(%d+%.%d+%.%d+)%.")
-    if not prefix then return nil, "Cannot determine subnet from " .. our_ip end
-    logger.dbg("AnkiDiscover: scanning", prefix .. ".1-254 :8765")
-
-    for i = 1, 254 do
-        local ip = prefix .. "." .. i
-        local tcp = socket.tcp()
-        tcp:settimeout(0.5)
-        local ok, err = tcp:connect(ip, 8765)
-        tcp:close()
-        if ok then
-            logger.dbg("AnkiDiscover: port open on", ip)
-            -- Port is open -- verify it is actually AnkiConnect.
-            http.TIMEOUT = 2
-            local response = {}
-            local body = '{"action":"requestPermission","version":6}'
-            local ok2, code = http.request {
-                url     = "http://" .. ip .. ":8765",
-                method  = "POST",
-                headers = {
-                    ["Content-Type"]   = "application/json",
-                    ["Content-Length"] = tostring(#body),
-                },
-                source = ltn12.source.string(body),
-                sink   = ltn12.sink.table(response),
-            }
-            if ok2 and tostring(code) == "200" then
-                local ok3, data = pcall(json.decode, table.concat(response))
-                if ok3 and data and data.result then
-                    return "http://" .. ip .. ":8765"
-                end
-            end
-        end
-    end
-    return nil, "Not found on " .. prefix .. ".x:8765"
-end
 
 -- Show the settings dialog. base_config is the full CONFIGURATION table
 -- from main.lua (with nested .anki subtable).
@@ -190,30 +117,31 @@ function SettingsViewer.show(base_config, on_saved)
             }})
         end
 
-        -- Discover AnkiConnect on LAN.
+        -- Test connection to configured AnkiConnect URL.
         table.insert(buttons, {{
-            text     = _("Discover Anki on LAN"),
+            text     = _("Test Connection"),
             callback = function()
-                UIManager:close(dlg)
-                local scanning = Notification:new {
-                    text    = _("Scanning local network.."),
-                    timeout = 120,
-                }
-                UIManager:show(scanning)
-                UIManager:scheduleIn(0.1, function()
-                    local url, err = discover_anki()
-                    UIManager:close(scanning)
+                local url = cfg.url
+                if not url or url == "" then
                     UIManager:show(Notification:new {
-                        text    = url and (_("Found: ") .. url) or (err or "Not found"),
-                        timeout = 5,
+                        text = _("Set the AnkiConnect URL first"),
+                        timeout = 3,
                     })
-                    if url then
-                        cfg.url = url
-                        CardStorage.save_anki_settings(cfg)
-                        if on_saved then on_saved(cfg) end
-                    end
-                    show_settings_dialog()
-                end)
+                    return
+                end
+                local ok, err = AnkiSync.test_connection(url)
+                if ok then
+                    UIManager:show(Notification:new {
+                        text = _("Connected to ") .. url,
+                        timeout = 3,
+                    })
+                else
+                    UIManager:show(Notification:new {
+                        text = _("Cannot reach ") .. url
+                            .. " - check IP and that Anki is running",
+                        timeout = 8,
+                    })
+                end
             end,
         }})
 
