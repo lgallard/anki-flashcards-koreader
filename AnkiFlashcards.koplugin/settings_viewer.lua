@@ -27,23 +27,28 @@ local function discover_anki()
     local ltn12  = require("ltn12")
     local json   = require("json")
 
+    local logger = require("logger")
+
     -- Determine our own IP via a UDP trick (no actual traffic sent).
     local s = socket.udp()
     s:setpeername("8.8.8.8", 80)
     local our_ip = s:getsockname()
     s:close()
     if not our_ip then return nil, "Cannot determine local IP" end
+    logger.dbg("AnkiDiscover: our IP =", our_ip)
 
     local prefix = our_ip:match("^(%d+%.%d+%.%d+)%.")
-    if not prefix then return nil, "Cannot determine subnet" end
+    if not prefix then return nil, "Cannot determine subnet from " .. our_ip end
+    logger.dbg("AnkiDiscover: scanning", prefix .. ".1-254 :8765")
 
     for i = 1, 254 do
         local ip = prefix .. "." .. i
         local tcp = socket.tcp()
-        tcp:settimeout(0.15)
-        local ok = tcp:connect(ip, 8765)
+        tcp:settimeout(0.5)
+        local ok, err = tcp:connect(ip, 8765)
         tcp:close()
         if ok then
+            logger.dbg("AnkiDiscover: port open on", ip)
             -- Port is open -- verify it is actually AnkiConnect.
             http.TIMEOUT = 2
             local response = {}
@@ -66,7 +71,7 @@ local function discover_anki()
             end
         end
     end
-    return nil, "AnkiConnect not found on local network"
+    return nil, "Not found on " .. prefix .. ".x:8765"
 end
 
 -- Show the settings dialog. base_config is the full CONFIGURATION table
