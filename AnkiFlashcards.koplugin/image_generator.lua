@@ -17,7 +17,7 @@ local DataStorage = require("datastorage")
 local BASE_URL  = "https://dashscope-intl.aliyuncs.com/api/v1"
 local CREATE_URL = BASE_URL .. "/services/aigc/text2image/image-synthesis"
 local TASK_URL   = BASE_URL .. "/tasks/"
-local MODEL      = "qwen-image-plus"
+local MODEL      = "wan2.2-t2i-flash"
 local IMAGE_DIR  = DataStorage:getDataDir() .. "/anki_images"
 
 local NEGATIVE_PROMPT =
@@ -75,7 +75,7 @@ local function create_task(api_key, image_prompt)
             negative_prompt = NEGATIVE_PROMPT,
         },
         parameters = {
-            size           = "1664*928",
+            size           = "1024*576",
             n              = 1,
             watermark      = false,
             prompt_extend  = true,
