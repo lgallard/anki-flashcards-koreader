@@ -29,12 +29,31 @@ local function discover_anki()
 
     local logger = require("logger")
 
-    -- Determine our own IP via a UDP trick (no actual traffic sent).
-    local s = socket.udp()
-    s:setpeername("8.8.8.8", 80)
-    local our_ip = s:getsockname()
-    s:close()
-    if not our_ip then return nil, "Cannot determine local IP" end
+    -- Get our local IP. The UDP trick returns 0.0.0.0 on KOReader,
+    -- so fall back to parsing Linux network commands.
+    local our_ip
+
+    -- Try: ip route get (most reliable on Linux)
+    local pipe = io.popen("ip -4 route get 8.8.8.8 2>/dev/null")
+    if pipe then
+        local out = pipe:read("*a")
+        pipe:close()
+        our_ip = out:match("src%s+(%d+%.%d+%.%d+%.%d+)")
+    end
+
+    -- Fallback: ifconfig wlan0 / eth0
+    if not our_ip or our_ip == "0.0.0.0" then
+        local pipe2 = io.popen("ifconfig wlan0 2>/dev/null || ifconfig eth0 2>/dev/null")
+        if pipe2 then
+            local out = pipe2:read("*a")
+            pipe2:close()
+            our_ip = out:match("inet%s+(%d+%.%d+%.%d+%.%d+)")
+        end
+    end
+
+    if not our_ip or our_ip == "0.0.0.0" or our_ip == "127.0.0.1" then
+        return nil, "Cannot determine local IP"
+    end
     logger.dbg("AnkiDiscover: our IP =", our_ip)
 
     local prefix = our_ip:match("^(%d+%.%d+%.%d+)%.")
@@ -176,12 +195,14 @@ function SettingsViewer.show(base_config, on_saved)
             text     = _("Discover Anki on LAN"),
             callback = function()
                 UIManager:close(dlg)
-                UIManager:show(Notification:new {
+                local scanning = Notification:new {
                     text    = _("Scanning local network.."),
-                    timeout = 60,
-                })
+                    timeout = 120,
+                }
+                UIManager:show(scanning)
                 UIManager:scheduleIn(0.1, function()
                     local url, err = discover_anki()
+                    UIManager:close(scanning)
                     UIManager:show(Notification:new {
                         text    = url and (_("Found: ") .. url) or (err or "Not found"),
                         timeout = 5,
