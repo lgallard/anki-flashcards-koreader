@@ -116,7 +116,7 @@ function SettingsViewer.show(base_config, on_saved)
         }})
 
         dlg = ButtonDialog:new {
-            title   = _("⚙ Anki Settings"),
+            title   = _("Anki Settings"),
             buttons = buttons,
         }
         UIManager:show(dlg)
