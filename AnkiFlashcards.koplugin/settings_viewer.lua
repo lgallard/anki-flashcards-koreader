@@ -132,14 +132,13 @@ function SettingsViewer.show(base_config, on_saved)
                 local ok, err = AnkiSync.test_connection(url)
                 if ok then
                     UIManager:show(Notification:new {
-                        text = _("Connected to ") .. url,
+                        text = _("Connection OK"),
                         timeout = 3,
                     })
                 else
                     UIManager:show(Notification:new {
-                        text = _("Cannot reach ") .. url
-                            .. " - check IP and that Anki is running",
-                        timeout = 8,
+                        text = _("Cannot reach Anki. Check URL and that Anki is running."),
+                        timeout = 5,
                     })
                 end
             end,

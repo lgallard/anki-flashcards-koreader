@@ -59,7 +59,11 @@ local function post(url, action, params)
         sink   = ltn12.sink.table(response),
     }
     if not ok or tostring(code) ~= "200" then
-        return nil, "HTTP error: " .. tostring(code)
+        local reason = tostring(code)
+        if reason == "timeout" or reason:find("unreachable") or reason:find("refused") then
+            return nil, "Cannot reach Anki. Check URL in Anki Settings."
+        end
+        return nil, "HTTP error: " .. reason
     end
     local ok2, result = pcall(json.decode, table.concat(response))
     if not ok2 then return nil, "JSON decode error" end
