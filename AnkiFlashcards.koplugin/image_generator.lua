@@ -132,6 +132,17 @@ local function download_image(url, save_path)
     return true
 end
 
+-- Resize a PNG file in-place using KOReader's own image rendering stack.
+-- Falls back silently (keeps original) if RenderImage is unavailable.
+local function resize_image(path, target_w, target_h)
+    local ok, RenderImage = pcall(require, "ui/renderimage")
+    if not ok then return end
+    local bb = RenderImage:renderImageFile(path, false, target_w, target_h)
+    if not bb then return end
+    pcall(bb.writePNG, bb, path)
+    bb:free()
+end
+
 -- ── Public API ────────────────────────────────────────────────────────────────
 
 -- Kick off async image generation. Returns immediately.
@@ -167,6 +178,7 @@ function ImageGenerator.generate_async(config, image_prompt, phrase, on_success,
             if status == "SUCCEEDED" then
                 local ok2, dl_err = download_image(url_or_err, save_path)
                 if ok2 then
+                    resize_image(save_path, 768, 432)
                     if on_success then on_success(save_path) end
                 else
                     if on_error then on_error(dl_err) end
