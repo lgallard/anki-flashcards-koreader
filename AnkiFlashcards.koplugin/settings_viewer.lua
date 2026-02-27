@@ -2,12 +2,13 @@
 -- Note type is fixed at "English" (read-only).
 -- Settings are saved to anki_flashcards_settings.json in the KOReader data dir.
 
-local ButtonDialog = require("ui/widget/buttondialog")
-local InputDialog  = require("ui/widget/inputdialog")
-local UIManager    = require("ui/uimanager")
-local _            = require("gettext")
+local ButtonDialog   = require("ui/widget/buttondialog")
+local InputDialog    = require("ui/widget/inputdialog")
+local Notification   = require("ui/widget/notification")
+local UIManager      = require("ui/uimanager")
+local _              = require("gettext")
 
-local CardStorage  = require("card_storage")
+local CardStorage    = require("card_storage")
 
 local SettingsViewer = {}
 
@@ -17,6 +18,56 @@ local FIELDS = {
     { key = "deck", label = "Deck",             hint = "English::Koreader" },
     { key = "tags", label = "Tags (comma-sep)", hint = "KOReader" },
 }
+
+-- Scan the local subnet for AnkiConnect on port 8765.
+-- Returns "http://IP:8765" on success, or nil + error string.
+local function discover_anki()
+    local socket = require("socket")
+    local http   = require("socket.http")
+    local ltn12  = require("ltn12")
+    local json   = require("json")
+
+    -- Determine our own IP via a UDP trick (no actual traffic sent).
+    local s = socket.udp()
+    s:setpeername("8.8.8.8", 80)
+    local our_ip = s:getsockname()
+    s:close()
+    if not our_ip then return nil, "Cannot determine local IP" end
+
+    local prefix = our_ip:match("^(%d+%.%d+%.%d+)%.")
+    if not prefix then return nil, "Cannot determine subnet" end
+
+    for i = 1, 254 do
+        local ip = prefix .. "." .. i
+        local tcp = socket.tcp()
+        tcp:settimeout(0.15)
+        local ok = tcp:connect(ip, 8765)
+        tcp:close()
+        if ok then
+            -- Port is open -- verify it is actually AnkiConnect.
+            http.TIMEOUT = 2
+            local response = {}
+            local body = '{"action":"requestPermission","version":6}'
+            local ok2, code = http.request {
+                url     = "http://" .. ip .. ":8765",
+                method  = "POST",
+                headers = {
+                    ["Content-Type"]   = "application/json",
+                    ["Content-Length"] = tostring(#body),
+                },
+                source = ltn12.source.string(body),
+                sink   = ltn12.sink.table(response),
+            }
+            if ok2 and tostring(code) == "200" then
+                local ok3, data = pcall(json.decode, table.concat(response))
+                if ok3 and data and data.result then
+                    return "http://" .. ip .. ":8765"
+                end
+            end
+        end
+    end
+    return nil, "AnkiConnect not found on local network"
+end
 
 -- Show the settings dialog. base_config is the full CONFIGURATION table
 -- from main.lua (with nested .anki subtable).
@@ -114,6 +165,31 @@ function SettingsViewer.show(base_config, on_saved)
                 end,
             }})
         end
+
+        -- Discover AnkiConnect on LAN.
+        table.insert(buttons, {{
+            text     = _("Discover Anki on LAN"),
+            callback = function()
+                UIManager:close(dlg)
+                UIManager:show(Notification:new {
+                    text    = _("Scanning local network.."),
+                    timeout = 60,
+                })
+                UIManager:scheduleIn(0.1, function()
+                    local url, err = discover_anki()
+                    UIManager:show(Notification:new {
+                        text    = url and (_("Found: ") .. url) or (err or "Not found"),
+                        timeout = 5,
+                    })
+                    if url then
+                        cfg.url = url
+                        CardStorage.save_anki_settings(cfg)
+                        if on_saved then on_saved(cfg) end
+                    end
+                    show_settings_dialog()
+                end)
+            end,
+        }})
 
         table.insert(buttons, {{
             text     = _("Close"),
