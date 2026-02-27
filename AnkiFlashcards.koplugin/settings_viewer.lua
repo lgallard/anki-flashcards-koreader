@@ -1,4 +1,4 @@
--- Anki Settings UI — lets the user change URL, Deck, and Tags.
+-- Anki Settings UI -- lets the user change URL, Deck, and Tags.
 -- Note type is fixed at "English" (read-only).
 -- Settings are saved to anki_flashcards_settings.json in the KOReader data dir.
 
@@ -18,14 +18,21 @@ local FIELDS = {
     { key = "tags", label = "Tags (comma-sep)", hint = "KOReader" },
 }
 
--- Show the settings dialog. base_config is the config table from main.lua.
+-- Show the settings dialog. base_config is the full CONFIGURATION table
+-- from main.lua (with nested .anki subtable).
 -- on_saved(new_cfg) is called after every field save so the caller can update
 -- its live copy.
 function SettingsViewer.show(base_config, on_saved)
+    -- Extract the anki subtable from the full config.
+    local anki_base = base_config
+    if base_config and type(base_config.anki) == "table" then
+        anki_base = base_config.anki
+    end
+
     -- Work on a merged copy so saved JSON values take priority.
     local cfg = {}
-    if base_config then
-        for k, v in pairs(base_config) do cfg[k] = v end
+    if anki_base then
+        for k, v in pairs(anki_base) do cfg[k] = v end
     end
     local saved = CardStorage.load_anki_settings()
     if saved then
@@ -44,8 +51,8 @@ function SettingsViewer.show(base_config, on_saved)
     local function short(key, max)
         local v = val(key)
         max = max or 30
-        if #v > max then return v:sub(1, max) .. "…" end
-        return v ~= "" and v or _("(not set)")
+        if #v > max then return v:sub(1, max) .. ".." end
+        return v ~= "" and v or "(not set)"
     end
 
     local function show_settings_dialog()
@@ -54,12 +61,11 @@ function SettingsViewer.show(base_config, on_saved)
 
         -- Read-only row for fixed note type.
         table.insert(buttons, {{
-            text    = _("Note type: English  (fixed)"),
-            enabled = false,
+            text     = _("Note type: English (fixed)"),
             callback = function() end,
         }})
 
-        for _, f in ipairs(FIELDS) do
+        for _i, f in ipairs(FIELDS) do
             local fref = f
             table.insert(buttons, {{
                 text     = fref.label .. ": " .. short(fref.key),
@@ -67,10 +73,9 @@ function SettingsViewer.show(base_config, on_saved)
                     UIManager:close(dlg)
                     local edit_dlg
                     edit_dlg = InputDialog:new {
-                        title      = _("Anki — ") .. fref.label,
+                        title      = _("Anki - ") .. fref.label,
                         input      = val(fref.key),
                         input_hint = fref.hint,
-                        input_type = "text",
                         buttons    = {{
                             {
                                 text     = _("Cancel"),
