@@ -23,7 +23,7 @@ Return ONLY a valid JSON object, no other text:
   "ipa": "<American English IPA of the canonical phrase, e.g. /ˈwɜːrd/>",
   "definition": "<context-aware definition of the canonical phrase, max 20 words>",
   "synonyms": "<3-4 synonyms for the canonical phrase, comma-separated>",
-  "text": "<natural example sentence in a different situation, using the phrase in the SAME tense/form/pronouns as the original highlighted text '{phrase}', with {{c1::...}} wrapping that exact form>",
+  "text": "<example sentence in a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context above; invent new characters and a new situation; keep the SAME tense/form/pronouns as the original highlighted text '{phrase}'; {{c1::...}} must wrap ONLY the phrase itself (e.g. {{c1::eviction notice}}, NOT {{c1::got an eviction notice}}) — no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 

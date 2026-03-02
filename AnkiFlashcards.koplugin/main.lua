@@ -136,6 +136,10 @@ function AnkiFlashcards:init()
                     source = author
                 end
 
+                -- Save the selection as a document highlight before
+                -- closing (onClose clears the selection state).
+                rhi:saveHighlight()
+
                 ui.highlight:onClose()
 
                 -- Show a loading notification while the AI call runs.
@@ -188,7 +192,10 @@ function AnkiFlashcards:init()
                             show_back = show_back_flag or false,
 
                             on_show_answer = function()
-                                UIManager:close(v)
+                                -- Close whichever viewer is currently showing
+                                -- (may differ from v after an async update).
+                                local cur = viewer_ref[1] or v
+                                UIManager:close(cur)
                                 local nv = make_viewer(c, true)
                                 viewer_ref[1] = nv
                             end,
