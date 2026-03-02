@@ -115,7 +115,32 @@ A stats screen showing vocabulary progress per book: highlights converted, cards
 
 ### Tier 3 — Polish
 
-#### 9. Context Crafter — Regenerate Example Sentence
+#### 9. Navigate to Source — Jump Back to Highlighted Phrase
+
+**Priority:** High
+
+When reviewing a flashcard, add a button to navigate back to the original highlighted phrase in the book. This lets the learner re-read the original sentence for full context or verify where the phrase came from.
+
+- Store the highlight position (`pos0`/`pos1`) or page number in the card at generation time
+- Add a "📖 Source" or "Go to highlight" button on the card back
+- On tap: close the card viewer and jump to the saved position in the document
+- Fallback: if position data is missing (older cards), search for the phrase in the current book text
+
+---
+
+#### 10. My Cards — Default to Current Book
+
+**Priority:** High — Low effort
+
+When opening "My Cards" from the highlight menu, default the list to show only cards from the current book instead of all cards. The book filter already exists — just pre-apply it using the current book's title.
+
+- Pass the current `book_title` to `CardManager.show()` as a default filter
+- User can still clear the filter to see all cards
+- Only applies when opened from within a book (not from a standalone menu)
+
+---
+
+#### 11. Context Crafter — Regenerate Example Sentence
 
 **Priority:** Medium
 
@@ -123,7 +148,7 @@ A stats screen showing vocabulary progress per book: highlights converted, cards
 
 ---
 
-#### 10. Art Director — Regenerate Image Only
+#### 12. Art Director — Regenerate Image Only
 
 **Priority:** Medium
 
@@ -131,7 +156,7 @@ A stats screen showing vocabulary progress per book: highlights converted, cards
 
 ---
 
-#### 11. Lexical Linker — Related Word Suggestions
+#### 13. Lexical Linker — Related Word Suggestions
 
 **Priority:** Low
 
