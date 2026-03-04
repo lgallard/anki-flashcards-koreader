@@ -8,7 +8,6 @@ local InputContainer = require("ui/widget/container/inputcontainer")
 local NetworkMgr     = require("ui/network/manager")
 local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
-local Event          = require("ui/event")
 local _              = require("gettext")
 
 local get_selection_in_context = require("selection_context")
@@ -221,13 +220,6 @@ function AnkiFlashcards:init()
                             on_send = function()
                                 return AnkiSync.send_card(get_anki_config(), c)
                             end,
-
-                            on_navigate_to_source = c.highlight_pos0 and function()
-                                local cur = viewer_ref[1]
-                                if cur then UIManager:close(cur) end
-                                local event_name = ui.paging and "GotoPage" or "GotoXPointer"
-                                ui:handleEvent(Event:new(event_name, c.highlight_pos0))
-                            end or nil,
 
                             on_regenerate = function()
                                 if viewer_ref[1] then
