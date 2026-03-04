@@ -118,9 +118,12 @@ function AnkiFlashcards:init()
                     MAX_TITLE
                 )
 
-                -- Highlighted text and surrounding context.
-                local highlighted = extract_text(rhi.selected_text or "")
+                -- Highlighted text, position, and surrounding context.
+                local sel = rhi.selected_text
+                local highlighted = extract_text(sel or "")
                 local phrase      = capitalize_first(clean_str(highlighted, MAX_HL))
+                local highlight_pos0 = sel and sel.pos0
+                local highlight_pos1 = sel and sel.pos1
                 local context     = clean_str(
                     get_selection_in_context(ui.document, highlighted, 10),
                     MAX_HL
@@ -176,9 +179,11 @@ function AnkiFlashcards:init()
                         return
                     end
 
-                    card.source      = cambridge_url(card.phrase)
-                    card.book_title  = title
-                    card.book_author = author
+                    card.source         = cambridge_url(card.phrase)
+                    card.book_title     = title
+                    card.book_author    = author
+                    card.highlight_pos0 = highlight_pos0
+                    card.highlight_pos1 = highlight_pos1
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
                     local viewer_ref = {}
@@ -237,9 +242,11 @@ function AnkiFlashcards:init()
                                         })
                                         return
                                     end
-                                    new_card.source      = cambridge_url(new_card.phrase)
-                                    new_card.book_title  = title
-                                    new_card.book_author = author
+                                    new_card.source         = cambridge_url(new_card.phrase)
+                                    new_card.book_title     = title
+                                    new_card.book_author    = author
+                                    new_card.highlight_pos0 = highlight_pos0
+                                    new_card.highlight_pos1 = highlight_pos1
                                     -- Regenerated card starts on front again.
                                     local nv = make_viewer(new_card, false)
                                     viewer_ref[1] = nv
@@ -321,8 +328,9 @@ function AnkiFlashcards:init()
             text    = _("My Cards"),
             enabled = true,
             callback = function()
+                local book_title = clean_str(self.ui.document:getProps().title, MAX_TITLE)
                 self.ui.highlight:onClose()
-                CardManager.show(CONFIGURATION)
+                CardManager.show(CONFIGURATION, book_title, self.ui)
             end,
         }
     end)

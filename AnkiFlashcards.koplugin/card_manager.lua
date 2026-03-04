@@ -7,6 +7,7 @@ local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
 local _              = require("gettext")
 
+local Event          = require("ui/event")
 local CardStorage    = require("card_storage")
 local AnkiSync       = require("anki_sync")
 local CardGenerator  = require("card_generator")
@@ -174,13 +175,13 @@ end
 
 -- ── Card list with optional book filter ───────────────────────────────────────
 
-function CardManager.show(base_config, filter_book)
+function CardManager.show(base_config, filter_book, ui)
     local anki_config = effective_config(base_config)
     local menu_instance
 
     local function refresh()
         if menu_instance then UIManager:close(menu_instance) end
-        CardManager.show(base_config, filter_book)
+        CardManager.show(base_config, filter_book, ui)
     end
 
     local all_cards  = CardStorage.load_cards()
@@ -270,6 +271,13 @@ function CardManager.show(base_config, filter_book)
                     on_send = function()
                         return AnkiSync.send_card(anki_config, card)
                     end,
+                    on_navigate_to_source = (ui and card.highlight_pos0) and function()
+                        local cur = viewer_ref[1]
+                        if cur then UIManager:close(cur) end
+                        if menu_instance then UIManager:close(menu_instance) end
+                        local event_name = ui.paging and "GotoPage" or "GotoXPointer"
+                        ui:handleEvent(Event:new(event_name, card.highlight_pos0))
+                    end or nil,
                     on_update = function(updated_card)
                         CardStorage.update_card(card_ref.phrase, updated_card)
                         card_ref.phrase = updated_card.phrase

@@ -77,6 +77,7 @@ local CardViewer = InputContainer:extend {
     on_regenerate  = nil,   -- function()
     on_update      = nil,   -- function(card) — called after a field edit (to persist)
     on_regen_ipa   = nil,   -- function(new_phrase, card, new_viewer) — async IPA regen after phrase change
+    on_navigate_to_source = nil, -- function() — jump to highlight position in book
     read_only      = false,
 
     text_padding   = Size.padding.large,
@@ -180,6 +181,13 @@ function CardViewer:init()
             table.insert(buttons_row, {
                 text     = _("↻"),
                 callback = function() self.on_regenerate() end,
+            })
+        end
+
+        if self.on_navigate_to_source then
+            table.insert(buttons_row, {
+                text     = _("Go to"),
+                callback = function() self.on_navigate_to_source() end,
             })
         end
 
