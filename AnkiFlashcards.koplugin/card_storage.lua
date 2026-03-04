@@ -52,9 +52,11 @@ function CardStorage.save_card(card)
         source      = card.source      or "",
         book_title  = card.book_title  or "",
         book_author = card.book_author or "",
-        image_path  = card.image_path  or "",
-        date        = os.date("%Y-%m-%d"),
-        sent_to_anki = false,
+        image_path     = card.image_path  or "",
+        highlight_pos0 = card.highlight_pos0,
+        highlight_pos1 = card.highlight_pos1,
+        date           = os.date("%Y-%m-%d"),
+        sent_to_anki   = false,
     })
     save_raw(entries)
     return true

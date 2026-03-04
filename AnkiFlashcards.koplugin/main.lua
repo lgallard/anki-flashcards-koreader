@@ -8,6 +8,7 @@ local InputContainer = require("ui/widget/container/inputcontainer")
 local NetworkMgr     = require("ui/network/manager")
 local Notification   = require("ui/widget/notification")
 local UIManager      = require("ui/uimanager")
+local Event          = require("ui/event")
 local _              = require("gettext")
 
 local get_selection_in_context = require("selection_context")
@@ -118,9 +119,12 @@ function AnkiFlashcards:init()
                     MAX_TITLE
                 )
 
-                -- Highlighted text and surrounding context.
-                local highlighted = extract_text(rhi.selected_text or "")
+                -- Highlighted text, position, and surrounding context.
+                local sel = rhi.selected_text
+                local highlighted = extract_text(sel or "")
                 local phrase      = capitalize_first(clean_str(highlighted, MAX_HL))
+                local highlight_pos0 = sel and sel.pos0
+                local highlight_pos1 = sel and sel.pos1
                 local context     = clean_str(
                     get_selection_in_context(ui.document, highlighted, 10),
                     MAX_HL
@@ -176,9 +180,11 @@ function AnkiFlashcards:init()
                         return
                     end
 
-                    card.source      = cambridge_url(card.phrase)
-                    card.book_title  = title
-                    card.book_author = author
+                    card.source         = cambridge_url(card.phrase)
+                    card.book_title     = title
+                    card.book_author    = author
+                    card.highlight_pos0 = highlight_pos0
+                    card.highlight_pos1 = highlight_pos1
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
                     local viewer_ref = {}
@@ -216,6 +222,13 @@ function AnkiFlashcards:init()
                                 return AnkiSync.send_card(get_anki_config(), c)
                             end,
 
+                            on_navigate_to_source = c.highlight_pos0 and function()
+                                local cur = viewer_ref[1]
+                                if cur then UIManager:close(cur) end
+                                local event_name = ui.paging and "GotoPage" or "GotoXPointer"
+                                ui:handleEvent(Event:new(event_name, c.highlight_pos0))
+                            end or nil,
+
                             on_regenerate = function()
                                 if viewer_ref[1] then
                                     UIManager:close(viewer_ref[1])
@@ -237,9 +250,11 @@ function AnkiFlashcards:init()
                                         })
                                         return
                                     end
-                                    new_card.source      = cambridge_url(new_card.phrase)
-                                    new_card.book_title  = title
-                                    new_card.book_author = author
+                                    new_card.source         = cambridge_url(new_card.phrase)
+                                    new_card.book_title     = title
+                                    new_card.book_author    = author
+                                    new_card.highlight_pos0 = highlight_pos0
+                                    new_card.highlight_pos1 = highlight_pos1
                                     -- Regenerated card starts on front again.
                                     local nv = make_viewer(new_card, false)
                                     viewer_ref[1] = nv
@@ -321,8 +336,9 @@ function AnkiFlashcards:init()
             text    = _("My Cards"),
             enabled = true,
             callback = function()
+                local book_title = clean_str(self.ui.document:getProps().title, MAX_TITLE)
                 self.ui.highlight:onClose()
-                CardManager.show(CONFIGURATION)
+                CardManager.show(CONFIGURATION, book_title)
             end,
         }
     end)
