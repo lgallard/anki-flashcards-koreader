@@ -186,7 +186,7 @@ function CardViewer:init()
 
         if self.on_navigate_to_source then
             table.insert(buttons_row, {
-                text     = _("📖"),
+                text     = _("Go to"),
                 callback = function() self.on_navigate_to_source() end,
             })
         end

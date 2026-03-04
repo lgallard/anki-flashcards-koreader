@@ -338,7 +338,7 @@ function AnkiFlashcards:init()
             callback = function()
                 local book_title = clean_str(self.ui.document:getProps().title, MAX_TITLE)
                 self.ui.highlight:onClose()
-                CardManager.show(CONFIGURATION, book_title)
+                CardManager.show(CONFIGURATION, book_title, self.ui)
             end,
         }
     end)
