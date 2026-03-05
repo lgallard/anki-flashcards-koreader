@@ -87,16 +87,11 @@ Browse all highlights from the current book and select which ones to convert to 
 
 ---
 
-#### 8. Per-Book Progress Dashboard
+#### ✅ 8. Per-Book Progress Dashboard
 
-**Priority:** Medium — Low effort
+Per-book stats screen showing total/sent/unsent card counts, accessible from Manage > Stats by Book.
 
-A stats screen showing vocabulary progress per book: highlights converted, cards created, cards sent to Anki.
-
-- Data is already available: `book_title` + `book_author` on every stored card
-- Group `CardStorage.load_cards()` by `book_title`
-- Show per-book counts: created / sent / unsent
-- Accessible from the "📚 My Cards" menu as a "📊 Stats" entry
+`card_manager.lua` — `show_stats()` groups `CardStorage.load_cards()` by `book_title` and displays per-book breakdowns in a Menu widget.
 
 ---
 
