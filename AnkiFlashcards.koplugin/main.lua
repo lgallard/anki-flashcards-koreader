@@ -141,7 +141,18 @@ function AnkiFlashcards:init()
 
                 -- Save the selection as a document highlight before
                 -- closing (onClose clears the selection state).
-                rhi:saveHighlight()
+                -- Skip if a highlight already exists at the same position.
+                local already_highlighted = false
+                local anns = (ui.annotation and ui.annotation.annotations) or {}
+                for _, ann in ipairs(anns) do
+                    if ann.drawer and ann.pos0 == highlight_pos0 and ann.pos1 == highlight_pos1 then
+                        already_highlighted = true
+                        break
+                    end
+                end
+                if not already_highlighted then
+                    rhi:saveHighlight()
+                end
 
                 ui.highlight:onClose()
 
@@ -418,6 +429,38 @@ function AnkiFlashcards:init()
             end,
         }
     end)
+
+    -- ── Auto-Send on WiFi ────────────────────────────────────────────────────
+    -- Polls every 60s. When WiFi is on and auto_send_wifi is enabled,
+    -- flushes all unsent cards to AnkiConnect in the background.
+    local AUTO_SEND_INTERVAL = 60
+    local function auto_send_tick()
+        UIManager:scheduleIn(AUTO_SEND_INTERVAL, auto_send_tick)
+        local cfg = get_anki_config()
+        if not cfg.auto_send_wifi then return end
+        if not cfg.url or cfg.url == "" then return end
+        if not NetworkMgr:isOnline() then return end
+
+        local cards = CardStorage.load_cards()
+        local sent = 0
+        for _, card in ipairs(cards) do
+            if not card.sent_to_anki then
+                local ok = AnkiSync.send_card(cfg, card)
+                if ok then
+                    CardStorage.mark_sent(card.phrase)
+                    sent = sent + 1
+                end
+            end
+        end
+        if sent > 0 then
+            UIManager:show(Notification:new {
+                text    = sent .. _(" card(s) sent to Anki"),
+                timeout = 3,
+            })
+        end
+    end
+    -- First check after 30s to let KOReader settle on startup.
+    UIManager:scheduleIn(30, auto_send_tick)
 
 end
 

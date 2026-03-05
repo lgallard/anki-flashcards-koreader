@@ -117,6 +117,21 @@ function SettingsViewer.show(base_config, on_saved)
             }})
         end
 
+        -- Auto-Send on WiFi toggle (opt-in, disabled by default).
+        local auto_label = cfg.auto_send_wifi
+                           and _("Auto-Send on WiFi: ON (tap to disable)")
+                           or  _("Auto-Send on WiFi: OFF (tap to enable)")
+        table.insert(buttons, {{
+            text     = auto_label,
+            callback = function()
+                cfg.auto_send_wifi = not cfg.auto_send_wifi
+                CardStorage.save_anki_settings(cfg)
+                if on_saved then on_saved(cfg) end
+                UIManager:close(dlg)
+                show_settings_dialog()
+            end,
+        }})
+
         -- Test connection to configured AnkiConnect URL.
         table.insert(buttons, {{
             text     = _("Test Connection"),
