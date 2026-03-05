@@ -17,7 +17,7 @@ A KOReader plugin that generates AI-powered Anki flashcards from highlighted tex
 
 ## Compatibility
 
-Developed and tested on a **Kobo Libra Colour** running KOReader. Since it uses only standard KOReader APIs, it should work on any device that runs KOReader (other Kobo models, Kindle, PocketBook, Android, etc.), but other devices have not been validated.
+Developed and tested on a **Kobo Libra Colour** and a **Kindle** running KOReader. Since it uses only standard KOReader APIs, it should work on any device that runs KOReader (other Kobo models, PocketBook, Android, etc.).
 
 ## Requirements
 
