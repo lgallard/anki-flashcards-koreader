@@ -161,9 +161,9 @@ function ImageGenerator.generate_async(config, image_prompt, phrase, on_success,
 
     local UIManager = require("ui/uimanager")
 
-    -- Build a safe filename from the phrase.
+    -- Build a unique filename from the phrase + timestamp.
     local safe = (phrase or "card"):lower():gsub("[^%w%-%_]", "_"):sub(1, 40)
-    local save_path = IMAGE_DIR .. "/" .. safe .. ".png"
+    local save_path = IMAGE_DIR .. "/" .. safe .. "_" .. os.time() .. ".png"
 
     -- Start the polling loop for an already-created task_id.
     local function start_polling(task_id)

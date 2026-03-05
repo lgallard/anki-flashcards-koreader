@@ -52,7 +52,8 @@ function CardStorage.save_card(card)
         source      = card.source      or "",
         book_title  = card.book_title  or "",
         book_author = card.book_author or "",
-        image_path     = card.image_path  or "",
+        image_path     = card.image_path    or "",
+        image_prompt   = card.image_prompt  or "",
         highlight_pos0 = card.highlight_pos0,
         highlight_pos1 = card.highlight_pos1,
         date           = os.date("%Y-%m-%d"),
@@ -88,12 +89,13 @@ function CardStorage.update_card(original_phrase, new_card)
     local entries = load_raw()
     for _, e in ipairs(entries) do
         if normalize(e.phrase) == key then
-            e.phrase     = new_card.phrase     or ""
-            e.ipa        = new_card.ipa        or ""
-            e.definition = new_card.definition or ""
-            e.synonyms   = new_card.synonyms   or ""
-            e.text       = new_card.text       or ""
-            e.source     = new_card.source     or ""
+            e.phrase       = new_card.phrase       or ""
+            e.ipa          = new_card.ipa          or ""
+            e.definition   = new_card.definition   or ""
+            e.synonyms     = new_card.synonyms     or ""
+            e.text         = new_card.text         or ""
+            e.source       = new_card.source       or ""
+            e.image_prompt = new_card.image_prompt or e.image_prompt or ""
             save_raw(entries)
             return true
         end

@@ -64,19 +64,6 @@ Automatically route cards to a deck named after the current book: `English::<boo
 
 ---
 
-#### 5. Duplicate Detection
-
-**Priority:** High — Low effort
-
-Before generating a card, query AnkiConnect to check whether a card for that phrase already exists in the collection. Skip generation and notify the user if a duplicate is found.
-
-- AnkiConnect action: `findNotes` with query `"Phrase:<phrase> deck:English"`
-- Call this check before showing the loading notification
-- Show "Already in Anki" notification if a duplicate exists
-- Avoids bloating the deck with repeated words across re-reads
-
----
-
 #### 6. Auto-Send on WiFi
 
 **Priority:** High — Medium effort
@@ -115,52 +102,35 @@ A stats screen showing vocabulary progress per book: highlights converted, cards
 
 ### Tier 3 — Polish
 
-#### 9. Navigate to Source — Jump Back to Highlighted Phrase
+#### ✅ 9. Navigate to Source — Jump Back to Highlighted Phrase
 
-**Priority:** High
+When reviewing a flashcard from My Cards, a "Go to" button navigates back to the original highlighted phrase in the book.
 
-When reviewing a flashcard, add a button to navigate back to the original highlighted phrase in the book. This lets the learner re-read the original sentence for full context or verify where the phrase came from.
-
-- Store the highlight position (`pos0`/`pos1`) or page number in the card at generation time
-- Add a "📖 Source" or "Go to highlight" button on the card back
-- On tap: close the card viewer and jump to the saved position in the document
-- Fallback: if position data is missing (older cards), search for the phrase in the current book text
+`card_storage.lua` — stores `highlight_pos0`/`highlight_pos1` with the card. `card_manager.lua` — passes `ui` reference and wires `on_navigate_to_source` callback using `GotoXPointer`/`GotoPage` events. `card_viewer.lua` — shows "Go to" button (text, not emoji — e-ink can't render emojis). Only shown in My Cards viewer, not during card creation (user is already at the highlight).
 
 ---
 
-#### 10. My Cards — Default to Current Book
+#### ✅ 10. My Cards — Default to Current Book
 
-**Priority:** High — Low effort
+When opening "My Cards" from the highlight menu, the list defaults to cards from the current book.
 
-When opening "My Cards" from the highlight menu, default the list to show only cards from the current book instead of all cards. The book filter already exists — just pre-apply it using the current book's title.
-
-- Pass the current `book_title` to `CardManager.show()` as a default filter
-- User can still clear the filter to see all cards
-- Only applies when opened from within a book (not from a standalone menu)
+`main.lua` — passes `book_title` and `self.ui` to `CardManager.show()`. User can still clear the filter to see all cards.
 
 ---
 
-#### 11. Context Crafter — Regenerate Example Sentence
+#### ✅ 11. Context Crafter — Regenerate Example Sentence
 
-**Priority:** Medium
+"Regen sentence" button in the Edit dialog: asks AI to regenerate only the cloze `Text` field + `image_prompt` with a fresh sentence. Also kicks off a new image generation with the updated prompt.
 
-"Simpler example" button on the card back: asks AI to regenerate only the cloze `Text` field with a cleaner or simpler sentence. Useful when the AI-generated sentence is awkward or too complex.
-
----
-
-#### 12. Art Director — Regenerate Image Only
-
-**Priority:** Medium
-
-"New image" button that triggers a new DashScope image generation without regenerating the full card. Useful when the image doesn't match the card's meaning.
+`card_generator.lua` — `generate_text()` with a sentence-only prompt returning `text` + `image_prompt`. Wired in `main.lua` and `card_manager.lua` via `on_regen_text` callback.
 
 ---
 
-#### 13. Lexical Linker — Related Word Suggestions
+#### ✅ 12. Art Director — Regenerate Image Only
 
-**Priority:** Low
+"Regen image" button in the Edit dialog: triggers a new DashScope image generation using the existing `image_prompt` without regenerating any text. `image_prompt` is now persisted in `card_storage.lua` so it works for saved cards opened from My Cards.
 
-After a card is generated, the AI suggests 2–3 related word-family terms (e.g., after carding "decisive" → suggests "decide", "indecisive", "decision"). One tap queues them for card generation.
+Wired in `main.lua` and `card_manager.lua` via `on_regen_image` callback.
 
 ---
 

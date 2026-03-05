@@ -269,6 +269,90 @@ function AnkiFlashcards:init()
                                     end
                                 end)
                             end,
+
+                            on_regen_text = function()
+                                if viewer_ref[1] then UIManager:close(viewer_ref[1]) end
+                                local loading3 = Notification:new {
+                                    text    = _("Regenerating sentence…"),
+                                    timeout = 30,
+                                }
+                                UIManager:show(loading3)
+                                NetworkMgr:runWhenOnline(function()
+                                    UIManager:scheduleIn(0.05, function()
+                                        UIManager:close(loading3)
+                                        local new_text, new_prompt = CardGenerator.generate_text(CONFIGURATION, c.phrase)
+                                        if not new_text then
+                                            UIManager:show(Notification:new {
+                                                text    = _("Regen failed: ") .. (new_prompt or "unknown"),
+                                                timeout = 5,
+                                            })
+                                            viewer_ref[1] = make_viewer(c, true)
+                                            return
+                                        end
+                                        c.text         = new_text
+                                        c.image_prompt = new_prompt
+                                        viewer_ref[1] = make_viewer(c, true)
+                                        -- Kick off image generation with new prompt.
+                                        if new_prompt then
+                                            ImageGenerator.generate_async(
+                                                CONFIGURATION,
+                                                new_prompt,
+                                                c.phrase,
+                                                function(img_path)
+                                                    c.image_path = img_path
+                                                    CardStorage.update_image_path(c.phrase, img_path)
+                                                    if viewer_ref[1] then
+                                                        viewer_ref[1] = viewer_ref[1]:update(c)
+                                                    end
+                                                end,
+                                                nil
+                                            )
+                                        end
+                                    end)
+                                end)
+                            end,
+
+                            on_regen_image = function()
+                                if not c.image_prompt or c.image_prompt == "" then
+                                    UIManager:show(Notification:new {
+                                        text    = _("No image prompt available"),
+                                        timeout = 3,
+                                    })
+                                    return
+                                end
+                                local old_image = c.image_path
+                                UIManager:show(Notification:new {
+                                    text    = _("Regenerating image…"),
+                                    timeout = 60,
+                                })
+                                ImageGenerator.generate_async(
+                                    CONFIGURATION,
+                                    c.image_prompt,
+                                    c.phrase,
+                                    function(img_path)
+                                        -- Clean up old image file.
+                                        if old_image and old_image ~= "" then
+                                            os.remove(old_image)
+                                        end
+                                        c.image_path = img_path
+                                        CardStorage.update_image_path(c.phrase, img_path)
+                                        if viewer_ref[1] then
+                                            viewer_ref[1] = viewer_ref[1]:update(c)
+                                        end
+                                        UIManager:setDirty(nil, "full")
+                                        UIManager:show(Notification:new {
+                                            text    = _("New image loaded!"),
+                                            timeout = 3,
+                                        })
+                                    end,
+                                    function(err)
+                                        UIManager:show(Notification:new {
+                                            text    = _("Image regen failed: ") .. (err or "unknown"),
+                                            timeout = 5,
+                                        })
+                                    end
+                                )
+                            end,
                         }
                         UIManager:show(v)
                         return v

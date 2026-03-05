@@ -78,6 +78,8 @@ local CardViewer = InputContainer:extend {
     on_update      = nil,   -- function(card) — called after a field edit (to persist)
     on_regen_ipa   = nil,   -- function(new_phrase, card, new_viewer) — async IPA regen after phrase change
     on_navigate_to_source = nil, -- function() — jump to highlight position in book
+    on_regen_text  = nil,   -- function() — regenerate example sentence only
+    on_regen_image = nil,   -- function() — regenerate image only
     read_only      = false,
 
     text_padding   = Size.padding.large,
@@ -362,6 +364,24 @@ function CardViewer:showEditDialog()
             end,
         }})
     end
+    if self.on_regen_text then
+        table.insert(field_buttons, {{
+            text     = _("Regen sentence"),
+            callback = function()
+                UIManager:close(sel_dlg)
+                self.on_regen_text()
+            end,
+        }})
+    end
+    if self.on_regen_image then
+        table.insert(field_buttons, {{
+            text     = _("Regen image"),
+            callback = function()
+                UIManager:close(sel_dlg)
+                self.on_regen_image()
+            end,
+        }})
+    end
     table.insert(field_buttons, {{
         text     = _("Cancel"),
         callback = function() UIManager:close(sel_dlg) end,
@@ -427,15 +447,18 @@ function CardViewer:update(new_card, new_show_back)
     local show_back = new_show_back ~= nil and new_show_back or self.show_back
     UIManager:close(self)
     local updated = CardViewer:new {
-        card           = card,
-        show_back      = show_back,
-        on_show_answer = self.on_show_answer,
-        on_save        = self.on_save,
-        on_send        = self.on_send,
-        on_regenerate  = self.on_regenerate,
-        on_update      = self.on_update,
-        on_regen_ipa   = self.on_regen_ipa,
-        read_only      = self.read_only,
+        card                  = card,
+        show_back             = show_back,
+        on_show_answer        = self.on_show_answer,
+        on_save               = self.on_save,
+        on_send               = self.on_send,
+        on_regenerate         = self.on_regenerate,
+        on_update             = self.on_update,
+        on_regen_ipa          = self.on_regen_ipa,
+        on_navigate_to_source = self.on_navigate_to_source,
+        on_regen_text         = self.on_regen_text,
+        on_regen_image        = self.on_regen_image,
+        read_only             = self.read_only,
     }
     UIManager:show(updated)
     return updated

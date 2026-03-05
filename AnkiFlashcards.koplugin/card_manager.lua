@@ -12,6 +12,7 @@ local CardStorage    = require("card_storage")
 local AnkiSync       = require("anki_sync")
 local CardGenerator  = require("card_generator")
 local CardViewer     = require("card_viewer")
+local ImageGenerator = require("image_generator")
 local NetworkMgr     = require("ui/network/manager")
 local SettingsViewer = require("settings_viewer")
 
@@ -281,6 +282,73 @@ function CardManager.show(base_config, filter_book, ui)
                     on_update = function(updated_card)
                         CardStorage.update_card(card_ref.phrase, updated_card)
                         card_ref.phrase = updated_card.phrase
+                    end,
+                    on_regen_text = function()
+                        if viewer_ref[1] then UIManager:close(viewer_ref[1]) end
+                        local loading_t = Notification:new {
+                            text    = _("Regenerating sentence…"),
+                            timeout = 30,
+                        }
+                        UIManager:show(loading_t)
+                        NetworkMgr:runWhenOnline(function()
+                            UIManager:scheduleIn(0.05, function()
+                                UIManager:close(loading_t)
+                                local new_text, new_prompt = CardGenerator.generate_text(base_config, card.phrase)
+                                if not new_text then
+                                    notify(_("Regen failed: ") .. (new_prompt or "unknown"))
+                                    viewer_ref[1] = make_viewer(true)
+                                    return
+                                end
+                                card.text         = new_text
+                                card.image_prompt = new_prompt
+                                CardStorage.update_card(card_ref.phrase, card)
+                                viewer_ref[1] = make_viewer(true)
+                                -- Kick off image generation with new prompt.
+                                if new_prompt then
+                                    ImageGenerator.generate_async(
+                                        base_config,
+                                        new_prompt,
+                                        card.phrase,
+                                        function(img_path)
+                                            card.image_path = img_path
+                                            CardStorage.update_image_path(card.phrase, img_path)
+                                            if viewer_ref[1] then
+                                                viewer_ref[1] = viewer_ref[1]:update(card)
+                                            end
+                                        end,
+                                        nil
+                                    )
+                                end
+                            end)
+                        end)
+                    end,
+                    on_regen_image = function()
+                        if not card.image_prompt or card.image_prompt == "" then
+                            notify(_("No image prompt available"))
+                            return
+                        end
+                        local old_image = card.image_path
+                        notify(_("Regenerating image…"))
+                        ImageGenerator.generate_async(
+                            base_config,
+                            card.image_prompt,
+                            card.phrase,
+                            function(img_path)
+                                if old_image and old_image ~= "" then
+                                    os.remove(old_image)
+                                end
+                                card.image_path = img_path
+                                CardStorage.update_image_path(card.phrase, img_path)
+                                if viewer_ref[1] then
+                                    viewer_ref[1] = viewer_ref[1]:update(card)
+                                end
+                                UIManager:setDirty(nil, "full")
+                                notify(_("New image loaded!"))
+                            end,
+                            function(err)
+                                notify(_("Image regen failed: ") .. (err or "unknown"))
+                            end
+                        )
                     end,
                     on_regen_ipa = function(new_phrase, updated_card, new_viewer)
                         NetworkMgr:runWhenOnline(function()

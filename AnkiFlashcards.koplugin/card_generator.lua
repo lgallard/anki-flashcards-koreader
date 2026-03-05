@@ -121,6 +121,67 @@ function CardGenerator.generate(config, phrase, context, title, author)
     return parse_response(raw_text)
 end
 
+-- Sentence-only regeneration prompt: returns text (cloze) + image_prompt.
+local TEXT_REGEN_PROMPT = [[You are an English flashcard generator.
+Phrase: "{phrase}"
+
+Return ONLY a valid JSON object, no other text:
+{
+  "text": "<example sentence in a FRESH scenario — invent new characters and a new situation; keep the SAME tense/form/pronouns as '{phrase}'; {{c1::...}} must wrap ONLY the phrase itself — no extra words around it inside the cloze>",
+  "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
+}]]
+
+-- Regenerate only the example sentence and image prompt for a phrase.
+-- Returns (text, image_prompt) or (nil, error_string).
+function CardGenerator.generate_text(config, phrase)
+    local api_key = config and (config.dashscope_api_key or config.api_key) or ""
+    if api_key == "" then return nil, "API key not configured" end
+
+    local p = escape_for_prompt(phrase or "")
+    local prompt = TEXT_REGEN_PROMPT
+        :gsub("{phrase}", function() return p end)
+
+    local request_body = json.encode({
+        model    = config.model or "qwen-plus",
+        messages = {{ role = "user", content = prompt }},
+    })
+
+    local headers = {
+        ["Content-Type"]  = "application/json",
+        ["Authorization"] = "Bearer " .. api_key,
+    }
+
+    local provider = config.provider
+    if not provider or provider == "" then
+        provider = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+    end
+
+    local response_body = {}
+    local ok, code = https.request {
+        url     = provider,
+        method  = "POST",
+        headers = headers,
+        source  = ltn12.source.string(request_body),
+        sink    = ltn12.sink.table(response_body),
+    }
+
+    if tostring(code) ~= "200" then
+        return nil, "HTTP " .. tostring(code)
+    end
+
+    local ok2, decoded = pcall(json.decode, table.concat(response_body))
+    if ok2 and decoded
+       and decoded.choices
+       and decoded.choices[1]
+       and decoded.choices[1].message then
+        local card = parse_response(decoded.choices[1].message.content)
+        if card then
+            return card.text, card.image_prompt
+        end
+    end
+    return nil, "Unexpected API response"
+end
+
 -- Generate IPA only for a given phrase. Returns (ipa_string, nil) or (nil, error).
 function CardGenerator.generate_ipa(config, phrase)
     local api_key = config and (config.dashscope_api_key or config.api_key) or ""
