@@ -64,28 +64,19 @@ Automatically route cards to a deck named after the current book: `English::<boo
 
 ---
 
-#### 5. Skip Duplicate Highlight on Card Creation
+#### ✅ 5. Skip Duplicate Highlight on Card Creation
 
-**Priority:** High — Low effort
+Before `rhi:saveHighlight()`, checks `ui.annotation.annotations` for an existing highlight at the same `pos0`/`pos1` — skips saving if already highlighted.
 
-When the user highlights a phrase that is already highlighted (e.g., re-reading a passage), `rhi:saveHighlight()` creates a duplicate highlight in the book. Before saving, check if a highlight already exists at the same position and skip the save if so.
-
-- Check `ui.annotation.annotations` for an existing highlight covering the same `pos0`/`pos1`
-- Only call `rhi:saveHighlight()` if no match is found
-- Avoids cluttering the book's highlight list with duplicates
+`main.lua` — loops through annotations before calling `rhi:saveHighlight()`.
 
 ---
 
-#### 6. Auto-Send on WiFi
+#### ✅ 6. Auto-Send on WiFi
 
-**Priority:** High — Medium effort
+Polls every 60s (first check after 30s). When WiFi is on and `auto_send_wifi` is enabled in settings, flushes all unsent cards to AnkiConnect and shows a notification with the count.
 
-When the Kobo connects to WiFi (e.g., for sync or browsing), silently flush all unsent locally-saved cards to AnkiConnect in the background.
-
-- Use `NetworkMgr` event/callback to detect WiFi becoming available
-- Trigger `AnkiSync.send_card` for each unsent card in `CardStorage.load_cards()`
-- Show a brief notification: "3 cards sent to Anki"
-- No user action required — cards appear in Anki automatically
+`main.lua` — `auto_send_tick()` scheduler in `init()`. `settings_viewer.lua` — tap-to-toggle button for the setting (disabled by default).
 
 ---
 
