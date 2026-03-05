@@ -64,6 +64,18 @@ Automatically route cards to a deck named after the current book: `English::<boo
 
 ---
 
+#### 5. Skip Duplicate Highlight on Card Creation
+
+**Priority:** High — Low effort
+
+When the user highlights a phrase that is already highlighted (e.g., re-reading a passage), `rhi:saveHighlight()` creates a duplicate highlight in the book. Before saving, check if a highlight already exists at the same position and skip the save if so.
+
+- Check `ui.annotation.annotations` for an existing highlight covering the same `pos0`/`pos1`
+- Only call `rhi:saveHighlight()` if no match is found
+- Avoids cluttering the book's highlight list with duplicates
+
+---
+
 #### 6. Auto-Send on WiFi
 
 **Priority:** High — Medium effort
