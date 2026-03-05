@@ -143,44 +143,53 @@ Wired in `main.lua` and `card_manager.lua` via `on_regen_image` callback.
 
 ### Tier 4 — Multi-Provider Support
 
-#### 13. OpenAI (ChatGPT) Support — Text Generation
+#### 13. OpenAI (ChatGPT) Support — Text + Image Generation
 
 **Priority:** Medium
 
-Add OpenAI as an alternative text generation provider. The plugin already uses an OpenAI-compatible chat completions endpoint — the main work is allowing users to configure a different base URL and API key for OpenAI.
+Add OpenAI as an alternative provider for both text and image generation. The plugin already uses an OpenAI-compatible chat completions endpoint — the main work is allowing users to configure a different base URL, API key, and image model.
 
-- Add `provider` dropdown or setting: `dashscope` (default), `openai`
+**Text generation:**
 - OpenAI endpoint: `https://api.openai.com/v1/chat/completions`
 - Default model: `gpt-4o-mini` (cost-effective) or `gpt-4o`
 - Reuse existing prompt templates — OpenAI uses the same chat completions format
 
+**Image generation:**
+- GPT Image 1 Mini: $0.005–0.05/image (cheapest paid option)
+- DALL-E 3: $0.04–0.12/image (higher quality)
+- Uses the OpenAI images API — simpler than DashScope async polling
+
 ---
 
-#### 14. Pollinations.ai (Flux) Support — Image Generation
+#### 14. Pollinations.ai (Flux) Support — Image Generation Only
 
 **Priority:** Medium
 
-Add [Pollinations.ai](https://pollinations.ai/) as a free alternative image generation provider using Flux models. Useful for users who want to avoid DashScope image costs ($0.03/image).
+Add [Pollinations.ai](https://pollinations.ai/) as a free alternative image generation provider using Flux models. Useful for users who want to avoid image generation costs entirely.
 
-- Pollinations offers a free HTTP API — no API key required
+- Free HTTP API — no API key required
 - Endpoint: `https://image.pollinations.ai/prompt/<url_encoded_prompt>`
-- Returns image directly (no async polling needed)
-- Add `image_provider` setting: `dashscope` (default), `pollinations`
-- Adapt `image_generator.lua` to support both providers
+- Returns image directly (no async polling needed — simpler than DashScope)
+- Add `image_provider` setting: `dashscope` (default), `pollinations`, `openai`, `gemini`
+- Adapt `image_generator.lua` to support multiple providers
 
 ---
 
-#### 15. Google Gemini Support — Text Generation
+#### 15. Google Gemini Support — Text + Image Generation
 
 **Priority:** Medium
 
-Add Google Gemini as an alternative text generation provider.
+Add Google Gemini as an alternative provider for both text and image generation. Gemini's free tier is very generous — 500 image generations/day with no credit card required.
 
+**Text generation:**
 - Gemini API endpoint: `https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`
 - Default model: `gemini-2.0-flash` (fast, cost-effective)
 - Requires adapting the request/response format (Gemini uses a different schema than OpenAI-compatible endpoints)
-- Add `gemini_api_key` config field
-- Reuse existing prompt templates, adapt the HTTP layer
+
+**Image generation:**
+- Gemini 2.5 Flash: free tier (500/day), ~$0.04/image on paid tier
+- Imagen 4 Fast: $0.02/image (cheaper than DashScope)
+- Single API key covers both text and image — no separate image provider needed
 
 ---
 
