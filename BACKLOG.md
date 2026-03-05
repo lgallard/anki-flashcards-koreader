@@ -141,6 +141,49 @@ Wired in `main.lua` and `card_manager.lua` via `on_regen_image` callback.
 
 ---
 
+### Tier 4 — Multi-Provider Support
+
+#### 13. OpenAI (ChatGPT) Support — Text Generation
+
+**Priority:** Medium
+
+Add OpenAI as an alternative text generation provider. The plugin already uses an OpenAI-compatible chat completions endpoint — the main work is allowing users to configure a different base URL and API key for OpenAI.
+
+- Add `provider` dropdown or setting: `dashscope` (default), `openai`
+- OpenAI endpoint: `https://api.openai.com/v1/chat/completions`
+- Default model: `gpt-4o-mini` (cost-effective) or `gpt-4o`
+- Reuse existing prompt templates — OpenAI uses the same chat completions format
+
+---
+
+#### 14. Pollinations.ai (Flux) Support — Image Generation
+
+**Priority:** Medium
+
+Add [Pollinations.ai](https://pollinations.ai/) as a free alternative image generation provider using Flux models. Useful for users who want to avoid DashScope image costs ($0.03/image).
+
+- Pollinations offers a free HTTP API — no API key required
+- Endpoint: `https://image.pollinations.ai/prompt/<url_encoded_prompt>`
+- Returns image directly (no async polling needed)
+- Add `image_provider` setting: `dashscope` (default), `pollinations`
+- Adapt `image_generator.lua` to support both providers
+
+---
+
+#### 15. Google Gemini Support — Text Generation
+
+**Priority:** Medium
+
+Add Google Gemini as an alternative text generation provider.
+
+- Gemini API endpoint: `https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent`
+- Default model: `gemini-2.0-flash` (fast, cost-effective)
+- Requires adapting the request/response format (Gemini uses a different schema than OpenAI-compatible endpoints)
+- Add `gemini_api_key` config field
+- Reuse existing prompt templates, adapt the HTTP layer
+
+---
+
 ### Dropped / Out of Scope
 
 #### ~~Light Anki Review Client~~ — Rejected
