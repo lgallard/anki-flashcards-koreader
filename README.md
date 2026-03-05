@@ -39,6 +39,27 @@ To get an API key:
 
 The default model is `qwen-plus`. For better quality you can use `qwen-max`; for faster/cheaper responses, `qwen-turbo`.
 
+### Cost Estimate
+
+The plugin uses two DashScope APIs: **qwen-plus** for text and **qwen-image-plus** for images. Image generation dominates the cost — text is essentially free.
+
+| Operation | Cost |
+|-----------|------|
+| Card generation (text + image) | ~$0.03 |
+| Regen sentence (+ new image) | ~$0.03 |
+| Regen image only | $0.03 |
+| Full card regenerate | ~$0.03 |
+| IPA regen / phrase edit | <$0.001 |
+
+| Cards per month | Estimated cost |
+|-----------------|---------------|
+| 10 | ~$0.30 |
+| 50 | ~$1.50 |
+| 100 | ~$3.00 |
+| 300 | ~$9.00 |
+
+> Prices based on [DashScope international pricing](https://www.alibabacloud.com/help/en/model-studio/model-pricing) (Singapore region): qwen-plus at $0.40/$1.20 per 1M input/output tokens, qwen-image-plus at $0.03/image.
+
 ## Installation
 
 1. Copy the `AnkiFlashcards.koplugin/` folder to your Kobo's plugin directory:
