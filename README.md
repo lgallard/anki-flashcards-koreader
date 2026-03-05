@@ -22,7 +22,7 @@ Developed and tested on a **Kobo Libra Colour** and a **Kindle** running KOReade
 ## Requirements
 
 - A Kobo e-reader running [KOReader](https://github.com/koreader/koreader)
-- A [DashScope API key](https://home.console.alibabacloud.com/) (Qwen)
+- A [DashScope API key](https://www.alibabacloud.com/help/en/model-studio/get-api-key) (Qwen)
 - [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on installed in Anki (for sending cards)
 - The **English** note type in Anki (see [Note Type](#note-type) below)
 
@@ -33,9 +33,8 @@ This plugin uses **Qwen** (by Alibaba Cloud) for all AI generation — card text
 To get an API key:
 
 1. Sign up at [Alibaba Cloud Model Studio](https://modelstudio.alibabacloud.com/)
-2. Go to the [API Key management page](https://home.console.alibabacloud.com/)
-3. Create a new key and copy it
-4. Paste it into `configuration.lua` as `dashscope_api_key`
+2. Follow the [Get an API key](https://www.alibabacloud.com/help/en/model-studio/get-api-key) guide — create a key for your region (Singapore, US Virginia, or China Beijing)
+3. Paste it into `configuration.lua` as `dashscope_api_key`
 
 The default model is `qwen-plus`. For better quality you can use `qwen-max`; for faster/cheaper responses, `qwen-turbo`.
 
