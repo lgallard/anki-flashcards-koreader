@@ -184,6 +184,22 @@ Add Google Gemini as an alternative provider for both text and image generation.
 
 ---
 
+#### 16. OpenRouter Support — Text Generation
+
+**Priority:** Medium
+
+Add [OpenRouter](https://openrouter.ai/) as an alternative text generation provider. OpenRouter is an OpenAI-compatible API gateway that gives access to hundreds of models (Claude, GPT, Llama, Mistral, Gemma, etc.) through a single API key and endpoint.
+
+- OpenRouter endpoint: `https://openrouter.ai/api/v1/chat/completions`
+- Uses the same OpenAI-compatible chat completions format — minimal adapter work
+- Add `text_provider` setting: `dashscope` (default), `openai`, `gemini`, `openrouter`
+- Configure via `openrouter_api_key` + optional `openrouter_model` in settings
+- Default model: `anthropic/claude-haiku` or `meta-llama/llama-3-8b-instruct` (cost-effective)
+- Users can pick any model from OpenRouter's catalog via the model setting
+- No image generation — pair with an image provider (`dashscope`, `pollinations`, `openai`, `gemini`)
+
+---
+
 ### Dropped / Out of Scope
 
 #### ~~Light Anki Review Client~~ — Rejected
