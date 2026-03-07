@@ -91,6 +91,9 @@ The plugin uses two DashScope APIs: **qwen-plus** for text and **qwen-image-plus
 3. Wait a few seconds — the flashcard appears with definition, synonyms, and cloze sentence
 4. Tap **Save** to store the card on-device, or **Send to Anki** to push it directly
 5. Access all saved cards via **My Cards** at any time
+6. Tap any highlight that has a saved card to instantly review it
+
+> **Tip:** If you have **"Dictionary on single word selection"** enabled in KOReader, selecting a single word will open the dictionary instead of the highlight menu. Disable it in **Settings → Taps and Gestures → Dictionary** so single-word selections go straight to the highlight menu with the Anki Card option.
 
 ## Note Type
 

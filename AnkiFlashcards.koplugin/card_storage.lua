@@ -125,6 +125,19 @@ function CardStorage.clear_all()
     save_raw({})
 end
 
+-- Find and return a saved card by phrase (case-insensitive, trimmed).
+-- Returns the card table or nil.
+function CardStorage.find_by_phrase(phrase)
+    local key     = normalize(phrase)
+    local entries = load_raw()
+    for _, e in ipairs(entries) do
+        if normalize(e.phrase) == key then
+            return e
+        end
+    end
+    return nil
+end
+
 -- Returns true if phrase is already saved (case-insensitive, trimmed).
 function CardStorage.is_saved(phrase)
     local key     = normalize(phrase)

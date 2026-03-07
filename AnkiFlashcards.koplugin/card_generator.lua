@@ -17,13 +17,17 @@ local PROMPT_TEMPLATE = [[You are an English flashcard generator for an advanced
 Highlighted: "{phrase}"
 Context: "...{context}..."
 
+IMPORTANT: The highlighted text "{phrase}" is your PRIMARY input. Generate a card for THIS phrase only.
+Do NOT extract a different word or expression from the Context — it is provided ONLY to help you
+understand the meaning of the highlighted text.
+
 Return ONLY a valid JSON object, no other text:
 {
-  "phrase": "<canonical form of the phrase, all lowercase: (1) use infinitive/base form — e.g. 'crank up' not 'cranked up', 'invite someone over' not 'invited him over'; (2) replace specific pronouns (him, her, them, me, us, it) with 'someone' or 'something' as appropriate>",
+  "phrase": "<canonical form of EXACTLY the highlighted text, all lowercase: (1) use infinitive/base form — e.g. 'cranked up' → 'crank up'; (2) replace specific pronouns (him, her, them, me, us, it) with 'someone' or 'something' as appropriate; NEVER substitute a different phrase from the context>",
   "ipa": "<American English IPA of the canonical phrase, e.g. /ˈwɜːrd/>",
   "definition": "<context-aware definition of the canonical phrase, max 20 words>",
   "synonyms": "<3-4 synonyms for the canonical phrase, comma-separated>",
-  "text": "<example sentence in a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context above; invent new characters and a new situation; keep the SAME tense/form/pronouns as the original highlighted text '{phrase}'; {{c1::...}} must wrap ONLY the phrase itself (e.g. {{c1::eviction notice}}, NOT {{c1::got an eviction notice}}) — no extra words around it inside the cloze>",
+  "text": "<example sentence in a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
@@ -46,12 +50,7 @@ local function parse_response(raw)
     if type(card.phrase) == "string" then
         card.phrase = card.phrase:lower()
     end
-    -- Lowercase the phrase inside {{c1::...}} cloze markers.
-    if type(card.text) == "string" then
-        card.text = card.text:gsub("({{c%d+::)(.-)(}})", function(open, p, close)
-            return open .. p:lower() .. close
-        end)
-    end
+    -- Cloze content is left as-is — the AI conjugates naturally for the sentence.
     return card
 end
 
@@ -127,7 +126,7 @@ Phrase: "{phrase}"
 
 Return ONLY a valid JSON object, no other text:
 {
-  "text": "<example sentence in a FRESH scenario — invent new characters and a new situation; keep the SAME tense/form/pronouns as '{phrase}'; {{c1::...}} must wrap ONLY the phrase itself — no extra words around it inside the cloze>",
+  "text": "<example sentence in a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 

@@ -430,6 +430,68 @@ function AnkiFlashcards:init()
         }
     end)
 
+    -- ── Tap-to-Show Flashcard ─────────────────────────────────────────────────
+    -- Short tap on a highlight with a saved card → show card viewer directly.
+    -- No saved card → fall through to original highlight menu.
+    local highlight_module = self.ui.highlight
+    local orig_onTap = highlight_module.onTap
+    local plugin_self = self
+
+    highlight_module.onTap = function(hl_self, arg, ges)
+        -- Pass through if mid-hold or no gesture
+        if hl_self.hold_pos or not ges then
+            return orig_onTap(hl_self, arg, ges)
+        end
+        local visible = hl_self.view and hl_self.view.highlight
+                        and hl_self.view.highlight.visible_boxes
+        if not visible or #visible == 0 then
+            return orig_onTap(hl_self, arg, ges)
+        end
+        local pos = hl_self.view:screenToPageTransform(ges.pos)
+        if not pos then
+            return orig_onTap(hl_self, arg, ges)
+        end
+
+        -- Find tapped highlight and check for a saved card
+        for _, box in ipairs(visible) do
+            local r = box.rect
+            if r and pos.x >= r.x and pos.y >= r.y
+               and pos.x <= r.x + r.w and pos.y <= r.y + r.h then
+                local ann = hl_self.ui.annotation.annotations[box.index]
+                if ann and ann.text then
+                    local card = CardStorage.find_by_phrase(ann.text)
+                    if card then
+                        local viewer_ref = {}
+                        local function make_viewer(show_back)
+                            local v
+                            v = CardViewer:new {
+                                card      = card,
+                                show_back = show_back,
+                                read_only = false,
+                                on_show_answer = function()
+                                    UIManager:close(v)
+                                    viewer_ref[1] = make_viewer(true)
+                                end,
+                                on_save = function()
+                                    return nil, _("Already saved")
+                                end,
+                                on_send = function()
+                                    return AnkiSync.send_card(get_anki_config(), card)
+                                end,
+                            }
+                            UIManager:show(v)
+                            return v
+                        end
+                        viewer_ref[1] = make_viewer(false)
+                        return true
+                    end
+                end
+                break  -- only check first hit; fall through to original
+            end
+        end
+        return orig_onTap(hl_self, arg, ges)
+    end
+
     -- ── Auto-Send on WiFi ────────────────────────────────────────────────────
     -- Polls every 60s. When WiFi is on and auto_send_wifi is enabled,
     -- flushes all unsent cards to AnkiConnect in the background.
