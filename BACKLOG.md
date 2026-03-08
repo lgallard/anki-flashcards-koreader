@@ -200,6 +200,36 @@ Add [OpenRouter](https://openrouter.ai/) as an alternative text generation provi
 
 ---
 
+### Tier 5 — Multi-Device Sync
+
+#### 17. Cloud Sync — Sync Cards Between Kobo Devices via Dropbox/WebDAV
+
+**Priority:** Medium
+
+Sync `anki_flashcards.json` across multiple Kobo devices using KOReader's built-in `SyncService` (same infrastructure used by VocabBuilder and Statistics plugins). Enables a user with two Kobos to see cards generated on one device when tapping the same highlight on the other.
+
+**How it works:**
+- Uses `require("frontend/apps/cloudstorage/syncservice")` — no external tools needed
+- Supports Dropbox and WebDAV out of the box
+- Three-way merge: local file, cached baseline (`.sync`), and remote copy (`.temp`)
+
+**Implementation:**
+1. **Menu entry:** Add "Cloud Sync" option in Anki Settings → opens `SyncService:new{}` server picker
+2. **Store server config:** Save selected server in plugin settings (`sync_server`)
+3. **Merge callback:** Three-way JSON merge for card arrays:
+   - Cards in remote but not cached → added on other device → add locally
+   - Cards in local but not cached → added on this device → keep
+   - Cards in cached but not local → deleted on this device → don't re-add
+   - Cards in both → keep the most recently updated version (compare `timestamp`)
+4. **Sync triggers:**
+   - Manual: "Sync Now" button in Anki Settings
+   - Auto: on plugin load (silent mode)
+5. **Conflict key:** Use `phrase + book_title` or `highlight_pos0 + highlight_pos1` as unique card identity for merge
+
+**Reference:** VocabBuilder plugin (`plugins/vocabbuilder.koplugin/main.lua`) uses the same pattern — `SyncService.sync(server, DB.path, DB.onSync, false)`.
+
+---
+
 ### Dropped / Out of Scope
 
 #### ~~Light Anki Review Client~~ — Rejected

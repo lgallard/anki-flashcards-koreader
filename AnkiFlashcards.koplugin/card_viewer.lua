@@ -80,6 +80,7 @@ local CardViewer = InputContainer:extend {
     on_navigate_to_source = nil, -- function() — jump to highlight position in book
     on_regen_text  = nil,   -- function() — regenerate example sentence only
     on_regen_image = nil,   -- function() — regenerate image only
+    on_highlight_dialog = nil, -- function() — open KOReader's native highlight dialog (color, style, delete…)
     read_only      = false,
 
     text_padding   = Size.padding.large,
@@ -130,6 +131,15 @@ function CardViewer:init()
                 if self.on_show_answer then self.on_show_answer() end
             end,
         })
+        if self.on_highlight_dialog then
+            table.insert(buttons_row, {
+                text     = _("Highlight"),
+                callback = function()
+                    self:onClose()
+                    self.on_highlight_dialog()
+                end,
+            })
+        end
         table.insert(buttons_row, {
             text     = _("Close"),
             callback = function() self:onClose() end,
@@ -190,6 +200,16 @@ function CardViewer:init()
             table.insert(buttons_row, {
                 text     = _("Go to"),
                 callback = function() self.on_navigate_to_source() end,
+            })
+        end
+
+        if self.on_highlight_dialog then
+            table.insert(buttons_row, {
+                text     = _("Highlight"),
+                callback = function()
+                    self:onClose()
+                    self.on_highlight_dialog()
+                end,
             })
         end
 
@@ -458,6 +478,7 @@ function CardViewer:update(new_card, new_show_back)
         on_navigate_to_source = self.on_navigate_to_source,
         on_regen_text         = self.on_regen_text,
         on_regen_image        = self.on_regen_image,
+        on_highlight_dialog   = self.on_highlight_dialog,
         read_only             = self.read_only,
     }
     UIManager:show(updated)

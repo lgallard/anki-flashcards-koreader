@@ -464,6 +464,7 @@ function AnkiFlashcards:init()
                     local card = CardStorage.find_by_position(ann.pos0, ann.pos1)
                                  or (ann.text and CardStorage.find_by_phrase_fuzzy(ann.text))
                     if card then
+                        local hl_index = box.index
                         local viewer_ref = {}
                         local function make_viewer(show_back)
                             local v
@@ -480,6 +481,9 @@ function AnkiFlashcards:init()
                                 end,
                                 on_send = function()
                                     return AnkiSync.send_card(get_anki_config(), card, CONFIGURATION)
+                                end,
+                                on_highlight_dialog = function()
+                                    hl_self:showHighlightDialog(hl_index)
                                 end,
                             }
                             UIManager:show(v)
