@@ -123,7 +123,7 @@ Create the note type in Anki (**Tools → Manage Note Types → Add**) with the 
 
 ## TTS Audio (ElevenLabs)
 
-The plugin can optionally generate text-to-speech audio for each card using [ElevenLabs](https://elevenlabs.io/). Audio is generated at send-time and attached to the Anki card's `Sound` field for playback during review on your phone or laptop. Audio cannot be played on the Kobo itself.
+The plugin can optionally generate text-to-speech audio for each card using [ElevenLabs](https://elevenlabs.io/). Audio is generated at send-time and attached to the Anki card's `Sound` field for playback during review on your phone or laptop. Audio cannot be played in KOReader (at least on Kobo).
 
 The audio says: *"phrase ... example sentence"* (with the cloze revealed).
 
