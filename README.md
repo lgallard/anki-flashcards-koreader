@@ -14,6 +14,7 @@ A KOReader plugin that generates AI-powered Anki flashcards from highlighted tex
 - **My Cards** — browse all saved cards on-device, filter by book, tap to review, hold to send or delete
 - **Anki Manage** — bulk send unsent cards, stats by book, batch import from all highlights in a book
 - **AnkiConnect integration** — send cards directly to Anki over Wi-Fi, synced to all your devices
+- **Optional TTS audio** — ElevenLabs text-to-speech generates pronunciation audio attached to each card for playback during Anki review
 
 ## Compatibility
 
@@ -25,6 +26,7 @@ Developed and tested on a **Kobo Libra Colour** and a **Kindle** running KOReade
 - A [DashScope API key](https://www.alibabacloud.com/help/en/model-studio/get-api-key) (Qwen)
 - [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on installed in Anki (for sending cards)
 - The **English** note type in Anki (see [Note Type](#note-type) below)
+- *(Optional)* An [ElevenLabs API key](https://elevenlabs.io/) for TTS audio on cards
 
 ## AI Provider: Qwen via DashScope
 
@@ -71,6 +73,12 @@ The plugin uses two DashScope APIs: **qwen-plus** for text and **qwen-image-plus
        dashscope_api_key = "YOUR_DASHSCOPE_API_KEY",
        provider          = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
        model             = "qwen-plus",
+
+       -- Optional: ElevenLabs TTS audio
+       elevenlabs_api_key  = "YOUR_ELEVENLABS_API_KEY",
+       elevenlabs_voice_id = "JBFqnCBsd6RMkjVDRZzb",  -- Rachel (default)
+       tts_enabled         = false,
+
        anki = {
            url   = "http://YOUR_HOST_IP:8765",  -- LAN IP of the device running Anki
            deck  = "English::Koreader",
@@ -109,9 +117,37 @@ The plugin uses an Anki note type named **English** with the following fields:
 | `Source` | Cambridge Dictionary URL for the phrase |
 | `ImageFront` | AI-generated anime-style illustration (front) |
 | `ImageBack` | AI-generated anime-style illustration (back) |
+| `Sound` | TTS audio pronunciation (optional, requires ElevenLabs) |
 
 Create the note type in Anki (**Tools → Manage Note Types → Add**) with the fields listed above before sending cards for the first time.
 
+## TTS Audio (ElevenLabs)
+
+The plugin can optionally generate text-to-speech audio for each card using [ElevenLabs](https://elevenlabs.io/). Audio is generated at send-time and attached to the Anki card's `Sound` field for playback during review on your phone or laptop. Audio cannot be played on the Kobo itself.
+
+The audio says: *"phrase ... example sentence"* (with the cloze revealed).
+
+### Setup
+
+1. Get an API key at [elevenlabs.io](https://elevenlabs.io/)
+2. Add `elevenlabs_api_key` to your `configuration.lua` on the device
+3. Enable TTS on-device: **Anki Manage → Anki Settings → TTS Audio (ElevenLabs): ON**
+4. Optionally change the voice ID in **Anki Settings → ElevenLabs Voice ID**
+
+The default voice is **Rachel** (`JBFqnCBsd6RMkjVDRZzb`). Browse available voices at [elevenlabs.io/voice-library](https://elevenlabs.io/voice-library).
+
+### Cost Estimate
+
+ElevenLabs charges per character. A typical card generates ~100–200 characters of speech.
+
+| Cards per month | Estimated cost |
+|-----------------|---------------|
+| 10 | ~$0.01 |
+| 50 | ~$0.05 |
+| 100 | ~$0.10 |
+
+> The free tier includes 10,000 characters/month (~50–100 cards).
+
 ## Configuration via Settings UI
 
-You can also set the Anki URL, deck, and tags directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
+You can also set the Anki URL, deck, tags, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.

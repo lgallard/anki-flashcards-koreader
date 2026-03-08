@@ -5,6 +5,11 @@ local CONFIGURATION = {
     provider          = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
     model             = "qwen-plus",
 
+    -- ── ElevenLabs TTS (optional — generates audio for Anki cards) ─────────
+    elevenlabs_api_key  = "YOUR_ELEVENLABS_API_KEY",
+    elevenlabs_voice_id = "JBFqnCBsd6RMkjVDRZzb",  -- Rachel (default)
+    tts_enabled         = false,
+
     -- ── Anki integration ────────────────────────────────────────────────────
     -- Requires AnkiConnect add-on running on the same network as your Kobo.
     -- Use the LAN IP of the device running Anki — not "localhost".

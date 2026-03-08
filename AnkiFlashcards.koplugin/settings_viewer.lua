@@ -15,9 +15,10 @@ local SettingsViewer = {}
 
 -- Editable fields (note type "English" is fixed).
 local FIELDS = {
-    { key = "url",  label = "AnkiConnect URL", hint = "http://192.168.x.x:8765" },
-    { key = "deck", label = "Deck",             hint = "English::Koreader" },
-    { key = "tags", label = "Tags (comma-sep)", hint = "KOReader" },
+    { key = "url",                  label = "AnkiConnect URL",     hint = "http://192.168.x.x:8765" },
+    { key = "deck",                 label = "Deck",                hint = "English::Koreader" },
+    { key = "tags",                 label = "Tags (comma-sep)",    hint = "KOReader" },
+    { key = "elevenlabs_voice_id",  label = "ElevenLabs Voice ID", hint = "JBFqnCBsd6RMkjVDRZzb" },
 }
 
 -- Show the settings dialog. base_config is the full CONFIGURATION table
@@ -125,6 +126,21 @@ function SettingsViewer.show(base_config, on_saved)
             text     = auto_label,
             callback = function()
                 cfg.auto_send_wifi = not cfg.auto_send_wifi
+                CardStorage.save_anki_settings(cfg)
+                if on_saved then on_saved(cfg) end
+                UIManager:close(dlg)
+                show_settings_dialog()
+            end,
+        }})
+
+        -- TTS Audio toggle (requires elevenlabs_api_key in configuration.lua).
+        local tts_label = cfg.tts_enabled
+                           and _("TTS Audio (ElevenLabs): ON")
+                           or  _("TTS Audio (ElevenLabs): OFF")
+        table.insert(buttons, {{
+            text     = tts_label,
+            callback = function()
+                cfg.tts_enabled = not cfg.tts_enabled
                 CardStorage.save_anki_settings(cfg)
                 if on_saved then on_saved(cfg) end
                 UIManager:close(dlg)

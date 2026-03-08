@@ -42,12 +42,12 @@ local function is_anki_ready(anki_config)
         and not anki_config.url:find("192.168.x.x")
 end
 
-local function send_one(anki_config, card)
+local function send_one(anki_config, card, tts_config)
     if not is_anki_ready(anki_config) then
         notify(_("Anki URL not set. Use Manage > Anki Settings."))
         return false
     end
-    local ok, err = AnkiSync.send_card(anki_config, card)
+    local ok, err = AnkiSync.send_card(anki_config, card, tts_config)
     if ok then
         CardStorage.mark_sent(card.phrase)
         return true
@@ -125,7 +125,7 @@ function CardManager.show_manage(base_config, opts)
                 local sent, failed = 0, 0
                 for _, card in ipairs(fresh) do
                     if not card.sent_to_anki then
-                        if send_one(anki_config, card) then
+                        if send_one(anki_config, card, base_config) then
                             sent = sent + 1
                         else
                             failed = failed + 1
@@ -270,7 +270,7 @@ function CardManager.show(base_config, filter_book, ui)
                         return nil, _("Already saved")
                     end,
                     on_send = function()
-                        return AnkiSync.send_card(anki_config, card)
+                        return AnkiSync.send_card(anki_config, card, base_config)
                     end,
                     on_navigate_to_source = (ui and card.highlight_pos0) and function()
                         local cur = viewer_ref[1]
@@ -383,7 +383,7 @@ function CardManager.show(base_config, filter_book, ui)
                 buttons = {
                     {{ text = _("Send to Anki"), callback = function()
                         UIManager:close(dialog)
-                        if send_one(anki_config, card) then
+                        if send_one(anki_config, card, base_config) then
                             notify(_("Sent!"))
                             refresh()
                         end

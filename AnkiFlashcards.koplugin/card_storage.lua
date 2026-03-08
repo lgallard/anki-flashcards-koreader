@@ -13,6 +13,43 @@ local function normalize(phrase)
     return (phrase or ""):lower():match("^%s*(.-)%s*$")
 end
 
+-- Naive English stemmer: strip common inflectional suffixes.
+local function stem(word)
+    local w = normalize(word)
+    -- Order matters — try longest suffixes first.
+    w = w:gsub("ies$", "y")       -- "stories" → "story"
+    w = w:gsub("ying$", "y")      -- "studying" → "study" (approximate)
+    w = w:gsub("ving$", "ve")     -- "having" → "have"
+    w = w:gsub("ting$", "t")      -- "sitting" → "sit" (approximate)
+    w = w:gsub("ning$", "n")      -- "running" → "run"
+    w = w:gsub("ging$", "g")      -- "nagging" → "nag"
+    w = w:gsub("ding$", "d")      -- "adding" → "add"
+    w = w:gsub("bing$", "b")      -- "rubbing" → "rub"
+    w = w:gsub("ping$", "p")      -- "tapping" → "tap"
+    w = w:gsub("ming$", "m")      -- "swimming" → "swim"
+    w = w:gsub("zing$", "z")      -- "buzzing" → "buz" (close enough)
+    w = w:gsub("sing$", "s")      -- "missing" → "mis" (approximate)
+    w = w:gsub("ing$", "")        -- "taxing" → "tax"
+    w = w:gsub("ied$", "y")       -- "studied" → "study"
+    w = w:gsub("ved$", "ve")      -- "moved" → "move"
+    w = w:gsub("ced$", "ce")      -- "danced" → "dance"
+    w = w:gsub("sed$", "se")      -- "closed" → "close"
+    w = w:gsub("ted$", "t")       -- "dotted" → "dot"
+    w = w:gsub("ned$", "n")       -- "planned" → "plan"
+    w = w:gsub("ged$", "g")       -- "nagged" → "nag"
+    w = w:gsub("ded$", "d")       -- "added" → "add"
+    w = w:gsub("bed$", "b")       -- "rubbed" → "rub"
+    w = w:gsub("ped$", "p")       -- "tapped" → "tap"
+    w = w:gsub("med$", "m")       -- "trimmed" → "trim"
+    w = w:gsub("ed$", "")         -- "walked" → "walk"
+    w = w:gsub("es$", "")         -- "cogs" won't match but "boxes" → "box"
+    w = w:gsub("s$", "")          -- "cogs" → "cog"
+    w = w:gsub("ly$", "")         -- "quickly" → "quick"
+    w = w:gsub("er$", "")         -- "bigger" → "bigg" (approximate)
+    w = w:gsub("est$", "")        -- "biggest" → "bigg"
+    return w
+end
+
 local function load_raw()
     local f = io.open(CARDS_FILE, "r")
     if not f then return {} end
@@ -132,6 +169,36 @@ function CardStorage.find_by_phrase(phrase)
     local entries = load_raw()
     for _, e in ipairs(entries) do
         if normalize(e.phrase) == key then
+            return e
+        end
+    end
+    return nil
+end
+
+-- Find a saved card by phrase with fuzzy stem matching.
+-- Tries exact (normalized) match first, then falls back to stem comparison.
+-- Returns the card table or nil.
+function CardStorage.find_by_phrase_fuzzy(phrase)
+    local exact = CardStorage.find_by_phrase(phrase)
+    if exact then return exact end
+    local key     = stem(phrase)
+    if key == "" then return nil end
+    local entries = load_raw()
+    for _, e in ipairs(entries) do
+        if stem(e.phrase) == key then
+            return e
+        end
+    end
+    return nil
+end
+
+-- Find a saved card by highlight position.
+-- Returns the card table or nil.
+function CardStorage.find_by_position(pos0, pos1)
+    if not pos0 then return nil end
+    local entries = load_raw()
+    for _, e in ipairs(entries) do
+        if e.highlight_pos0 == pos0 then
             return e
         end
     end

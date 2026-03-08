@@ -104,10 +104,11 @@ function AnkiSync.test_connection(url)
 end
 
 -- Send a full flashcard to Anki.
--- config: { url, deck, model, tags }
--- card:   { phrase, ipa, definition, synonyms, text, source }
+-- config:     { url, deck, model, tags, tts_enabled, elevenlabs_voice_id }
+-- card:       { phrase, ipa, definition, synonyms, text, source }
+-- tts_config: full CONFIGURATION table (optional — provides elevenlabs_api_key)
 -- Returns true or nil + error string.
-function AnkiSync.send_card(config, card)
+function AnkiSync.send_card(config, card, tts_config)
     if not config or not config.url or config.url == "" then
         return nil, "Anki URL not configured"
     end
@@ -156,6 +157,29 @@ function AnkiSync.send_card(config, card)
                 local img_ref        = '<img src="' .. stored .. '">'
                 fields["ImageFront"] = img_ref
                 fields["ImageBack"]  = img_ref
+            end
+        end)
+    end
+
+    -- Generate and attach TTS audio if enabled.
+    local tts_api_key = tts_config and tts_config.elevenlabs_api_key
+    local tts_on      = config and config.tts_enabled
+    if tts_on and tts_api_key and tts_api_key ~= "" then
+        pcall(function()
+            local AudioGenerator = require("audio_generator")
+            local tts_cfg = {
+                elevenlabs_api_key  = tts_api_key,
+                elevenlabs_voice_id = config.elevenlabs_voice_id,
+            }
+            local mp3_bytes = AudioGenerator.generate(tts_cfg, card)
+            if mp3_bytes then
+                local b64         = base64_encode(mp3_bytes)
+                local phrase_slug = (card.phrase or "card"):gsub("[^%w]", "_"):lower()
+                local fname       = phrase_slug .. "_" .. tostring(os.time()) .. ".mp3"
+                local stored      = store_media_file(config.url, fname, b64)
+                if stored then
+                    fields["Sound"] = "[sound:" .. stored .. "]"
+                end
             end
         end)
     end

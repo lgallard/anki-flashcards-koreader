@@ -229,7 +229,9 @@ function AnkiFlashcards:init()
                             end,
 
                             on_send = function()
-                                return AnkiSync.send_card(get_anki_config(), c)
+                                local ok, err = AnkiSync.send_card(get_anki_config(), c, CONFIGURATION)
+                                if ok then CardStorage.save_card(c) end
+                                return ok, err
                             end,
 
                             on_regenerate = function()
@@ -458,8 +460,9 @@ function AnkiFlashcards:init()
             if r and pos.x >= r.x and pos.y >= r.y
                and pos.x <= r.x + r.w and pos.y <= r.y + r.h then
                 local ann = hl_self.ui.annotation.annotations[box.index]
-                if ann and ann.text then
-                    local card = CardStorage.find_by_phrase(ann.text)
+                if ann then
+                    local card = CardStorage.find_by_position(ann.pos0, ann.pos1)
+                                 or (ann.text and CardStorage.find_by_phrase_fuzzy(ann.text))
                     if card then
                         local viewer_ref = {}
                         local function make_viewer(show_back)
@@ -476,7 +479,7 @@ function AnkiFlashcards:init()
                                     return nil, _("Already saved")
                                 end,
                                 on_send = function()
-                                    return AnkiSync.send_card(get_anki_config(), card)
+                                    return AnkiSync.send_card(get_anki_config(), card, CONFIGURATION)
                                 end,
                             }
                             UIManager:show(v)
@@ -507,7 +510,7 @@ function AnkiFlashcards:init()
         local sent = 0
         for _, card in ipairs(cards) do
             if not card.sent_to_anki then
-                local ok = AnkiSync.send_card(cfg, card)
+                local ok = AnkiSync.send_card(cfg, card, CONFIGURATION)
                 if ok then
                     CardStorage.mark_sent(card.phrase)
                     sent = sent + 1
