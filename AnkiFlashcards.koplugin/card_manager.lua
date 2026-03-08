@@ -374,6 +374,24 @@ function CardManager.show(base_config, filter_book, ui)
                 return v
             end
             viewer_ref[1] = make_viewer(false)
+            -- Auto-regenerate image if missing (e.g. synced card).
+            if (not card.image_path or card.image_path == "")
+               and card.image_prompt and card.image_prompt ~= ""
+               and NetworkMgr:isOnline() then
+                ImageGenerator.generate_async(
+                    config,
+                    card.image_prompt,
+                    card.phrase,
+                    function(img_path)
+                        card.image_path = img_path
+                        CardStorage.update_image_path(card.phrase, img_path)
+                        if viewer_ref[1] then
+                            viewer_ref[1] = viewer_ref[1]:update(card)
+                        end
+                    end,
+                    nil  -- silent on error
+                )
+            end
         end
 
         local function open_context_menu()

@@ -10,6 +10,7 @@ local _              = require("gettext")
 
 local AnkiSync       = require("anki_sync")
 local CardStorage    = require("card_storage")
+local CardSync       = require("card_sync")
 
 local SettingsViewer = {}
 
@@ -172,6 +173,26 @@ function SettingsViewer.show(base_config, on_saved)
                         timeout = 5,
                     })
                 end
+            end,
+        }})
+
+        -- Cloud Sync via SyncService (Dropbox/WebDAV).
+        local sync_label
+        if cfg.sync_server then
+            local sname = cfg.sync_server.name or cfg.sync_server.address or "Cloud"
+            sync_label = _("Cloud Sync: ") .. sname
+        else
+            sync_label = _("Cloud Sync: (not configured)")
+        end
+        table.insert(buttons, {{
+            text     = sync_label,
+            callback = function()
+                UIManager:close(dlg)
+                CardSync.show_cloud_sync_dialog(cfg, function(new_cfg)
+                    cfg = new_cfg
+                    if on_saved then on_saved(new_cfg) end
+                    show_settings_dialog()
+                end)
             end,
         }})
 

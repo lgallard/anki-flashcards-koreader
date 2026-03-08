@@ -17,6 +17,7 @@ local CardViewer       = require("card_viewer")
 local CardStorage      = require("card_storage")
 local AnkiSync         = require("anki_sync")
 local CardManager      = require("card_manager")
+local CardSync         = require("card_sync")
 local HighlightInbox   = require("highlight_inbox")
 local ImageGenerator   = require("image_generator")
 
@@ -482,6 +483,45 @@ function AnkiFlashcards:init()
                                 on_send = function()
                                     return AnkiSync.send_card(get_anki_config(), card, CONFIGURATION)
                                 end,
+                                on_regen_image = function()
+                                    if not card.image_prompt or card.image_prompt == "" then
+                                        UIManager:show(Notification:new {
+                                            text    = _("No image prompt available"),
+                                            timeout = 3,
+                                        })
+                                        return
+                                    end
+                                    local old_image = card.image_path
+                                    UIManager:show(Notification:new {
+                                        text    = _("Regenerating image…"),
+                                        timeout = 60,
+                                    })
+                                    ImageGenerator.generate_async(
+                                        CONFIGURATION,
+                                        card.image_prompt,
+                                        card.phrase,
+                                        function(img_path)
+                                            if old_image and old_image ~= "" then
+                                                os.remove(old_image)
+                                            end
+                                            card.image_path = img_path
+                                            CardStorage.update_image_path(card.phrase, img_path)
+                                            if viewer_ref[1] then
+                                                viewer_ref[1] = viewer_ref[1]:update(card)
+                                            end
+                                            UIManager:show(Notification:new {
+                                                text    = _("New image loaded!"),
+                                                timeout = 3,
+                                            })
+                                        end,
+                                        function(err)
+                                            UIManager:show(Notification:new {
+                                                text    = _("Image regen failed: ") .. (err or "unknown"),
+                                                timeout = 5,
+                                            })
+                                        end
+                                    )
+                                end,
                                 on_highlight_dialog = function()
                                     hl_self:showHighlightDialog(hl_index)
                                 end,
@@ -490,6 +530,24 @@ function AnkiFlashcards:init()
                             return v
                         end
                         viewer_ref[1] = make_viewer(false)
+                        -- Auto-regenerate image if missing (e.g. synced card).
+                        if (not card.image_path or card.image_path == "")
+                           and card.image_prompt and card.image_prompt ~= ""
+                           and NetworkMgr:isOnline() then
+                            ImageGenerator.generate_async(
+                                CONFIGURATION,
+                                card.image_prompt,
+                                card.phrase,
+                                function(img_path)
+                                    card.image_path = img_path
+                                    CardStorage.update_image_path(card.phrase, img_path)
+                                    if viewer_ref[1] then
+                                        viewer_ref[1] = viewer_ref[1]:update(card)
+                                    end
+                                end,
+                                nil  -- silent on error
+                            )
+                        end
                         return true
                     end
                 end
@@ -530,6 +588,15 @@ function AnkiFlashcards:init()
     end
     -- First check after 30s to let KOReader settle on startup.
     UIManager:scheduleIn(30, auto_send_tick)
+
+    -- ── Auto-Sync on Startup ──────────────────────────────────────────────
+    -- One-shot silent cloud sync 45s after startup.
+    UIManager:scheduleIn(45, function()
+        local cfg = get_anki_config()
+        if cfg.sync_server and NetworkMgr:isOnline() then
+            CardSync.run_sync(cfg.sync_server, true)
+        end
+    end)
 
 end
 

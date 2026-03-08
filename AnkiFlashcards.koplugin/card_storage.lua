@@ -94,6 +94,7 @@ function CardStorage.save_card(card)
         highlight_pos0 = card.highlight_pos0,
         highlight_pos1 = card.highlight_pos1,
         date           = os.date("%Y-%m-%d"),
+        updated_at     = os.time(),
         sent_to_anki   = false,
     })
     save_raw(entries)
@@ -133,6 +134,7 @@ function CardStorage.update_card(original_phrase, new_card)
             e.text         = new_card.text         or ""
             e.source       = new_card.source       or ""
             e.image_prompt = new_card.image_prompt or e.image_prompt or ""
+            e.updated_at   = os.time()
             save_raw(entries)
             return true
         end
