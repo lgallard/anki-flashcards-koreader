@@ -235,6 +235,7 @@ function CardViewer:init()
     local content_widget
 
     -- Build a scaled ImageWidget (16:9, max 40% of content height).
+    -- Tapping the image opens a full-screen zoomable viewer.
     local function make_image_widget(image_path)
         if not image_path or image_path == "" then return nil, 0 end
         local natural_h = math.floor(inner_w * 9 / 16)
@@ -242,12 +243,15 @@ function CardViewer:init()
         local img_h     = math.min(natural_h, max_h)
         local img_w     = (img_h == natural_h) and inner_w
                           or math.floor(img_h * 16 / 9)
-        return ImageWidget:new {
+        local img = ImageWidget:new {
             file         = image_path,
             width        = img_w,
             height       = img_h,
             scale_factor = 0,
-        }, img_h
+        }
+        self._tap_image_widget = img
+        self._tap_image_path   = image_path
+        return img, img_h
     end
 
     -- Build a ScrollTextWidget for one content section.
@@ -503,6 +507,17 @@ end
 function CardViewer:onTapClose(arg, ges_ev)
     -- Don't close while any dialog (InputDialog, ButtonDialog, VirtualKeyboard…) is on top.
     if UIManager:getTopmostVisibleWidget() ~= self then
+        return true
+    end
+    -- Tap on image → open full-screen zoomable viewer.
+    if self._tap_image_widget and self._tap_image_path
+       and self._tap_image_widget.dimen
+       and ges_ev.pos:intersectWith(self._tap_image_widget.dimen) then
+        local ImageViewer = require("ui/widget/imageviewer")
+        UIManager:show(ImageViewer:new {
+            file       = self._tap_image_path,
+            fullscreen = true,
+        })
         return true
     end
     if ges_ev.pos:notIntersectWith(self.frame.dimen) then

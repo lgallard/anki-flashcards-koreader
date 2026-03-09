@@ -163,13 +163,15 @@ function AnkiSync.send_card(config, card, tts_config)
 
     -- Generate and attach TTS audio if enabled.
     local tts_api_key = tts_config and tts_config.elevenlabs_api_key
-    local tts_on      = config and config.tts_enabled
+    local tts_on      = (config and config.tts_enabled)
+                      or (tts_config and tts_config.tts_enabled)
     if tts_on and tts_api_key and tts_api_key ~= "" then
         pcall(function()
             local AudioGenerator = require("audio_generator")
             local tts_cfg = {
                 elevenlabs_api_key  = tts_api_key,
-                elevenlabs_voice_id = config.elevenlabs_voice_id,
+                elevenlabs_voice_id = config.elevenlabs_voice_id
+                                      or (tts_config and tts_config.elevenlabs_voice_id),
             }
             local mp3_bytes = AudioGenerator.generate(tts_cfg, card)
             if mp3_bytes then
