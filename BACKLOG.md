@@ -202,31 +202,37 @@ Add [OpenRouter](https://openrouter.ai/) as an alternative text generation provi
 
 ### Tier 5 — Multi-Device Sync
 
-#### 17. Cloud Sync — Sync Cards Between Kobo Devices via Dropbox/WebDAV
+#### ✅ 17. Cloud Sync — Sync Cards Between Kobo Devices via Dropbox/WebDAV
 
-**Priority:** Medium
+Sync `anki_flashcards.json` across multiple Kobo devices using KOReader's built-in `SyncService` (Dropbox/WebDAV). Three-way JSON merge handles adds, deletes, and conflicts by `updated_at` timestamp.
 
-Sync `anki_flashcards.json` across multiple Kobo devices using KOReader's built-in `SyncService` (same infrastructure used by VocabBuilder and Statistics plugins). Enables a user with two Kobos to see cards generated on one device when tapping the same highlight on the other.
+`card_sync.lua` — merge callback with card identity `normalize(phrase)__normalize(book_title)`, sync runner, and Cloud Sync UI dialog (Sync Now / Change Server / Remove Server). `card_storage.lua` — added `updated_at = os.time()` in `save_card()` and `update_card()`. `settings_viewer.lua` — Cloud Sync button row. `main.lua` — silent auto-sync 45s after startup (only when already online).
 
-**How it works:**
-- Uses `require("frontend/apps/cloudstorage/syncservice")` — no external tools needed
-- Supports Dropbox and WebDAV out of the box
-- Three-way merge: local file, cached baseline (`.sync`), and remote copy (`.temp`)
+Images are not synced (device-local paths). Synced cards auto-regenerate images when opened if online.
 
-**Implementation:**
-1. **Menu entry:** Add "Cloud Sync" option in Anki Settings → opens `SyncService:new{}` server picker
-2. **Store server config:** Save selected server in plugin settings (`sync_server`)
-3. **Merge callback:** Three-way JSON merge for card arrays:
-   - Cards in remote but not cached → added on other device → add locally
-   - Cards in local but not cached → added on this device → keep
-   - Cards in cached but not local → deleted on this device → don't re-add
-   - Cards in both → keep the most recently updated version (compare `timestamp`)
-4. **Sync triggers:**
-   - Manual: "Sync Now" button in Anki Settings
-   - Auto: on plugin load (silent mode)
-5. **Conflict key:** Use `phrase + book_title` or `highlight_pos0 + highlight_pos1` as unique card identity for merge
+---
 
-**Reference:** VocabBuilder plugin (`plugins/vocabbuilder.koplugin/main.lua`) uses the same pattern — `SyncService.sync(server, DB.path, DB.onSync, false)`.
+#### ✅ 18. Tap-to-Zoom on Card Images
+
+Tapping the image in the card viewer opens KOReader's full-screen `ImageViewer` with pinch-to-zoom and pan support.
+
+`card_viewer.lua` — stores image widget reference, intercepts tap in `onTapClose` before close logic, opens `ImageViewer` when tap lands on image.
+
+---
+
+#### ✅ 19. Auto-Regenerate Images on Synced Cards
+
+Cards imported via cloud sync arrive without images. When opened (tap-to-show or My Cards), if the card has an `image_prompt` but no `image_path` and WiFi is connected, image generation starts automatically in the background. Silent failure if offline.
+
+`main.lua` — auto-regen in tap-to-show viewer. `card_manager.lua` — auto-regen in card list viewer.
+
+---
+
+#### ✅ 20. Regen Image in Tap-to-Show Viewer
+
+Added `on_regen_image` callback to the tap-to-show card viewer (triggered when tapping a highlight with a saved card). Previously only available during initial card creation and in the card manager.
+
+`main.lua` — wired `on_regen_image` in the tap-to-show `make_viewer` function.
 
 ---
 
