@@ -109,6 +109,8 @@ local function show_quick_lookup_popup(phrase, lookup)
     local CenterContainer = require("ui/widget/container/centercontainer")
     local Font            = require("ui/font")
     local FrameContainer  = require("ui/widget/container/framecontainer")
+    local Geom            = require("ui/geometry")
+    local GestureRange    = require("ui/gesturerange")
     local InputContainer  = require("ui/widget/container/inputcontainer")
     local Size            = require("ui/size")
     local TextBoxWidget   = require("ui/widget/textboxwidget")
@@ -166,19 +168,29 @@ local function show_quick_lookup_popup(phrase, lookup)
 
     local popup
     popup = InputContainer:new {
+        ges_events = {
+            TapClose = {
+                GestureRange:new {
+                    ges   = "tap",
+                    range = Geom:new { x = 0, y = 0, w = screen_w, h = screen_h },
+                },
+            },
+        },
         CenterContainer:new {
-            dimen = { w = screen_w, h = screen_h },
+            dimen = Geom:new { w = screen_w, h = screen_h },
             frame,
         },
     }
-    popup.onTapClose = function() UIManager:close(popup) return true end
-    popup.onAnyKeyPressed = function() UIManager:close(popup) return true end
+    function popup:onTapClose()
+        UIManager:close(self)
+        return true
+    end
+    function popup:onAnyKeyPressed()
+        UIManager:close(self)
+        return true
+    end
 
     UIManager:show(popup)
-    -- Auto-dismiss after 10s.
-    UIManager:scheduleIn(10, function()
-        UIManager:close(popup)
-    end)
 end
 
 function AnkiFlashcards:init()
