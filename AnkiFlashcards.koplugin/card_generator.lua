@@ -25,9 +25,9 @@ Return ONLY a valid JSON object, no other text:
 {
   "phrase": "<canonical form of EXACTLY the highlighted text, all lowercase: (1) use infinitive/base form — e.g. 'cranked up' → 'crank up'; (2) replace specific pronouns (him, her, them, me, us, it) with 'someone' or 'something' as appropriate; NEVER substitute a different phrase from the context>",
   "ipa": "<American English IPA of the canonical phrase, e.g. /ˈwɜːrd/>",
-  "definition": "<context-aware definition of the canonical phrase, max 20 words>",
-  "synonyms": "<3-4 synonyms for the canonical phrase, comma-separated>",
-  "text": "<example sentence in a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
+  "definition": "<context-aware definition using simple everyday words (B2–C1 level), max 20 words; the definition itself must NOT contain difficult or rare vocabulary>",
+  "synonyms": "<3-4 common, high-frequency synonyms for the canonical phrase, comma-separated; avoid rare or literary words>",
+  "text": "<example sentence at B2–C1 level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
@@ -126,7 +126,7 @@ Phrase: "{phrase}"
 
 Return ONLY a valid JSON object, no other text:
 {
-  "text": "<example sentence in a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
+  "text": "<example sentence at B2–C1 level: use simple grammar and everyday vocabulary — the phrase must be the ONLY challenging word; create a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
@@ -226,6 +226,58 @@ function CardGenerator.generate_ipa(config, phrase)
         local ipa = decoded.choices[1].message.content
         if ipa then
             return ipa:match("^%s*(.-)%s*$")  -- trim whitespace
+        end
+    end
+    return nil, "Unexpected API response"
+end
+
+-- Quick lookup: IPA + short definition only (for purple highlight tap).
+-- Returns ({ipa, definition}, nil) or (nil, error_string).
+function CardGenerator.generate_quick_lookup(config, phrase)
+    local api_key = config and (config.dashscope_api_key or config.api_key) or ""
+    if api_key == "" then return nil, "API key not configured" end
+
+    local p = escape_for_prompt(phrase or "")
+    local prompt = 'You are an English dictionary. Return ONLY valid JSON for: "' .. p .. '"\n'
+                .. '{"ipa": "<American English IPA, e.g. /ɪɡˈzæmpəl/>", '
+                .. '"definition": "<simple, clear definition in everyday English, max 15 words>"}'
+
+    local request_body = json.encode({
+        model    = config.model or "qwen-plus",
+        messages = {{ role = "user", content = prompt }},
+    })
+
+    local headers = {
+        ["Content-Type"]  = "application/json",
+        ["Authorization"] = "Bearer " .. api_key,
+    }
+
+    local provider = config.provider
+    if not provider or provider == "" then
+        provider = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
+    end
+
+    local response_body = {}
+    local ok, code = https.request {
+        url     = provider,
+        method  = "POST",
+        headers = headers,
+        source  = ltn12.source.string(request_body),
+        sink    = ltn12.sink.table(response_body),
+    }
+
+    if tostring(code) ~= "200" then
+        return nil, "HTTP " .. tostring(code)
+    end
+
+    local ok2, decoded = pcall(json.decode, table.concat(response_body))
+    if ok2 and decoded
+       and decoded.choices
+       and decoded.choices[1]
+       and decoded.choices[1].message then
+        local result = parse_response(decoded.choices[1].message.content)
+        if result and result.ipa and result.definition then
+            return result
         end
     end
     return nil, "Unexpected API response"

@@ -98,6 +98,89 @@ local function get_anki_config()
     return cfg
 end
 
+-- ── Quick Lookup cache + popup (purple highlights) ──────────────────────────
+local quick_lookup_cache = {}
+
+local PTF_BOLD_ON  = "\xEF\xBF\xB2"
+local PTF_BOLD_OFF = "\xEF\xBF\xB3"
+
+local function show_quick_lookup_popup(phrase, lookup)
+    local Blitbuffer      = require("ffi/blitbuffer")
+    local CenterContainer = require("ui/widget/container/centercontainer")
+    local Font            = require("ui/font")
+    local FrameContainer  = require("ui/widget/container/framecontainer")
+    local InputContainer  = require("ui/widget/container/inputcontainer")
+    local Size            = require("ui/size")
+    local TextBoxWidget   = require("ui/widget/textboxwidget")
+    local VerticalGroup   = require("ui/widget/verticalgroup")
+    local VerticalSpan    = require("ui/widget/verticalspan")
+
+    local screen_w = Device.screen:getWidth()
+    local screen_h = Device.screen:getHeight()
+    local popup_w  = math.floor(screen_w * 0.82)
+    local pad      = Size.padding.large
+
+    local COLOR_BLUE = Blitbuffer.ColorRGB32(0x00, 0x3A, 0x75, 0xFF)
+    local COLOR_RED  = Blitbuffer.ColorRGB32(0xBB, 0x00, 0x00, 0xFF)
+
+    local inner_w = popup_w - pad * 2
+
+    local phrase_w = TextBoxWidget:new {
+        text      = capitalize_first(phrase),
+        face      = Font:getFace("cfont", 24),
+        fgcolor   = COLOR_BLUE,
+        width     = inner_w,
+        alignment = "center",
+        bold      = true,
+    }
+    local ipa_w = TextBoxWidget:new {
+        text      = lookup.ipa or "",
+        face      = Font:getFace("cfont", 20),
+        fgcolor   = COLOR_RED,
+        width     = inner_w,
+        alignment = "center",
+    }
+    local def_w = TextBoxWidget:new {
+        text      = lookup.definition or "",
+        face      = Font:getFace("cfont", 20),
+        width     = inner_w,
+        alignment = "center",
+    }
+
+    local content = VerticalGroup:new {
+        align = "center",
+        phrase_w,
+        VerticalSpan:new { width = Size.padding.default },
+        ipa_w,
+        VerticalSpan:new { width = Size.padding.default },
+        def_w,
+    }
+
+    local frame = FrameContainer:new {
+        background   = Blitbuffer.COLOR_WHITE,
+        bordersize   = Size.border.window,
+        radius       = Size.radius.window,
+        padding      = pad,
+        content,
+    }
+
+    local popup
+    popup = InputContainer:new {
+        CenterContainer:new {
+            dimen = { w = screen_w, h = screen_h },
+            frame,
+        },
+    }
+    popup.onTapClose = function() UIManager:close(popup) return true end
+    popup.onAnyKeyPressed = function() UIManager:close(popup) return true end
+
+    UIManager:show(popup)
+    -- Auto-dismiss after 10s.
+    UIManager:scheduleIn(10, function()
+        UIManager:close(popup)
+    end)
+end
+
 function AnkiFlashcards:init()
 
     -- ── Entry 4: Anki Card (primary action, registered last = bottom) ───────────
@@ -456,7 +539,7 @@ function AnkiFlashcards:init()
         end
 
         -- Find tapped highlight and check for a saved card
-        for _, box in ipairs(visible) do
+        for _i, box in ipairs(visible) do
             local r = box.rect
             if r and pos.x >= r.x and pos.y >= r.y
                and pos.x <= r.x + r.w and pos.y <= r.y + r.h then
@@ -548,6 +631,61 @@ function AnkiFlashcards:init()
                                 nil  -- silent on error
                             )
                         end
+                        return true
+                    end
+
+                    -- ── Quick Lookup for purple highlights ───────────────
+                    if ann.color == "purple" and ann.text and ann.text ~= "" then
+                        local phrase_text = ann.text
+                        local ann_ref     = ann
+                        local ui_ref      = hl_self.ui
+
+                        -- Check annotation note for a previously saved lookup.
+                        if ann_ref.note and ann_ref.note:match("^%[IPA%]") then
+                            local ipa = ann_ref.note:match("%[IPA%] (.-) | ")
+                            local def = ann_ref.note:match("| (.+)$")
+                            if ipa and def then
+                                show_quick_lookup_popup(phrase_text, { ipa = ipa, definition = def })
+                                return true
+                            end
+                        end
+
+                        -- Check session cache.
+                        if quick_lookup_cache[phrase_text] then
+                            show_quick_lookup_popup(phrase_text, quick_lookup_cache[phrase_text])
+                            return true
+                        end
+
+                        if not NetworkMgr:isOnline() then
+                            -- Offline: fall through to normal highlight menu.
+                            break
+                        end
+                        local loading = Notification:new {
+                            text    = _("Looking up: ") .. phrase_text,
+                            timeout = 15,
+                        }
+                        UIManager:show(loading)
+                        UIManager:scheduleIn(0.05, function()
+                            UIManager:close(loading)
+                            local result, err = CardGenerator.generate_quick_lookup(
+                                CONFIGURATION, phrase_text
+                            )
+                            if result then
+                                quick_lookup_cache[phrase_text] = result
+                                -- Persist to annotation note for offline access.
+                                ann_ref.note = "[IPA] " .. (result.ipa or "")
+                                            .. " | " .. (result.definition or "")
+                                local Event = require("ui/event")
+                                ui_ref:handleEvent(Event:new("AnnotationsModified",
+                                    { ann_ref, nb_highlights_added = 0, nb_notes_added = 1 }))
+                                show_quick_lookup_popup(phrase_text, result)
+                            else
+                                UIManager:show(Notification:new {
+                                    text    = _("Lookup failed: ") .. (err or "unknown"),
+                                    timeout = 3,
+                                })
+                            end
+                        end)
                         return true
                     end
                 end

@@ -14,6 +14,8 @@ A KOReader plugin that generates AI-powered Anki flashcards from highlighted tex
 - **My Cards** — browse all saved cards on-device, filter by book, tap to review, hold to send or delete
 - **Anki Manage** — bulk send unsent cards, stats by book, batch import from all highlights in a book
 - **AnkiConnect integration** — send cards directly to Anki over Wi-Fi, synced to all your devices
+- **Quick Lookup on purple highlights** — tap any purple highlight to see a styled popup with IPA and definition (no full card needed). Saved to the annotation for instant offline access on subsequent taps
+- **Cloud Sync** — sync cards across multiple Kobo devices via Dropbox or WebDAV using KOReader's built-in SyncService
 - **Optional TTS audio** — ElevenLabs text-to-speech generates pronunciation audio attached to each card for playback during Anki review
 
 ## Compatibility
