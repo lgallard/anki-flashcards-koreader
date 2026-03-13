@@ -250,6 +250,105 @@ Tap a purple-highlighted word (with no saved card) and see a centered `InfoMessa
 
 `card_generator.lua` — `generate_quick_lookup()` with a minimal IPA+definition prompt. `main.lua` — purple highlight detection in `onTap`, session cache `quick_lookup_cache`, `show_quick_lookup_popup()` helper.
 
+#### ✅ 23. Highlight Button in Card Viewer
+
+Added a "Highlight" button to the card viewer that opens KOReader's native highlight style/color picker, allowing the user to change the highlight's visual appearance (color, drawer style) without leaving the card viewer.
+
+`card_viewer.lua` — wired `on_highlight` callback using `rhi:onShowHighlightStyleDialog()`.
+
+---
+
+### Tier 7 — Extended Features
+
+#### 24. Multi-Language Support
+
+**Priority:** Medium
+
+Extend the plugin beyond English-only flashcards. Allow users to configure a target language so prompts, IPA, definitions, and cloze sentences are generated in that language.
+
+- Add `target_language` setting (default: `English`)
+- Adapt `PROMPT_TEMPLATE` to generate cards in the configured language
+- IPA may not apply to all languages — fall back to romanization or pronunciation guide
+- Cambridge Dictionary URL only works for English — use a generic source or skip for other languages
+- Settings UI: language picker in Anki Settings
+
+---
+
+#### 25. Card Export to CSV/TSV
+
+**Priority:** Low
+
+Export saved cards to a CSV or TSV file for users who don't use AnkiConnect (e.g. import via Anki Desktop's file import). Useful as a fallback when AnkiConnect is unavailable.
+
+- Export all cards or filter by book
+- Include all fields: Phrase, IPA, Definition, Synonyms, Text, Source
+- Images exported as filenames (user copies image files separately)
+- File saved to device storage (e.g. `/mnt/onboard/anki_export.csv`)
+- Entry point: Anki Manage → Export Cards
+
+---
+
+#### 26. Customizable Prompt Templates
+
+**Priority:** Low
+
+Let users customize the AI prompt template on-device. Power users may want to adjust the definition style, cloze difficulty, or image prompt without editing Lua code.
+
+- Store custom prompts in settings JSON
+- Settings UI: editable text fields for card prompt and sentence-regen prompt
+- "Reset to default" button to restore built-in prompts
+- Validate that the prompt still requests the required JSON fields
+
+---
+
+#### 27. Card Deduplication on Send
+
+**Priority:** Medium
+
+Before sending a card to Anki, check if a card with the same phrase already exists in the target deck. Prevents duplicates when the same word is highlighted on multiple devices or across re-reads.
+
+- Use AnkiConnect `findNotes` with `deck:<deck> Phrase:<phrase>` query
+- If duplicate found: show dialog — Skip, Replace, or Send Anyway
+- Option in settings: `skip_duplicates` (default: true) for silent skip
+- Log skipped duplicates in the send summary notification
+
+---
+
+#### 28. Bulk Delete by Book
+
+**Priority:** Low
+
+Delete all cards for a specific book in one tap. Useful after finishing a book and sending all cards to Anki.
+
+- Entry point: Anki Manage → Stats by Book → long-press book → "Delete all cards for this book"
+- Confirmation dialog with card count
+- Only deletes local cards — Anki cards are unaffected
+
+---
+
+#### 29. Quick Lookup for All Highlight Colors
+
+**Priority:** Low
+
+Extend the quick lookup popup (#22) beyond purple highlights to work on any highlight color (or a configurable set of colors).
+
+- Add `quick_lookup_colors` setting: list of highlight colors that trigger the popup (default: `{"purple"}`)
+- Settings UI: multi-select for highlight colors
+- Reuse existing `generate_quick_lookup()` and annotation note persistence
+
+---
+
+#### 30. Offline Dictionary Fallback
+
+**Priority:** Medium
+
+When WiFi is off and a quick lookup or card generation is attempted, fall back to KOReader's built-in dictionaries instead of failing silently. Provides basic definitions without the AI-generated card.
+
+- Use KOReader's `ReaderDictionary:onLookupWord()` or `DictQuickLookup` for offline lookup
+- Quick lookup (#22): show dictionary definition in the popup when offline
+- Card generation: optionally pre-fill definition from dictionary, then enhance with AI when online
+- No API cost for offline lookups
+
 ---
 
 ### Dropped / Out of Scope
