@@ -236,6 +236,35 @@ Added `on_regen_image` callback to the tap-to-show card viewer (triggered when t
 
 ---
 
+### Tier 6 — Prompt & UX Refinements
+
+#### 21. Simpler Cloze Sentences, Definitions, and Synonyms
+
+**Priority:** High
+
+The AI-generated cloze sentence (`Text` field) sometimes introduces difficult vocabulary or complex grammar, making it harder to recall the original highlighted phrase. The definition and synonyms can also be overly advanced.
+
+- Tune the card generation prompt to enforce simpler language (A2–B1 level) in the example sentence
+- Definition should use plain, everyday words (≤15 words, no rare synonyms in the definition itself)
+- Synonyms should be common, high-frequency alternatives — not obscure near-synonyms
+- The cloze sentence should provide clear, unambiguous context for the target phrase without introducing new unknown words
+
+---
+
+#### 22. Quick Lookup Popup on Purple Highlights — IPA + Short Definition
+
+**Priority:** Medium — **Status: Needs evaluation**
+
+Tap a purple-highlighted word and see a small popup/bubble with its IPA transcription and a brief definition — a lightweight lookup without generating a full flashcard.
+
+**Open questions (scope evaluation needed):**
+- Should this be part of this plugin or a separate KOReader plugin?
+- Can we intercept taps on existing highlights by drawer color (`lighten`, `underscore`, etc.)?
+- Should it call the AI API for IPA + definition, or use a local dictionary/offline source?
+- Save behavior: persist to annotations, or ephemeral popup only?
+
+---
+
 ### Dropped / Out of Scope
 
 #### ~~Light Anki Review Client~~ — Rejected
