@@ -351,6 +351,10 @@ When WiFi is off and a quick lookup or card generation is attempted, fall back t
 
 ---
 
+> **Tracking:** Open items are tracked as [GitHub Issues](https://github.com/lgallard/anki-flashcards-koreader/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement).
+
+---
+
 ### Dropped / Out of Scope
 
 #### ~~Light Anki Review Client~~ — Rejected
