@@ -119,6 +119,26 @@ function SettingsViewer.show(base_config, on_saved)
             }})
         end
 
+        -- Text provider toggle.
+        local TEXT_PROVIDERS = { "dashscope", "gemini" }
+        local cur_text = cfg.text_provider or "dashscope"
+        local text_label = _("Text Provider: ") .. cur_text
+        table.insert(buttons, {{
+            text     = text_label,
+            callback = function()
+                local idx = 1
+                for i, p in ipairs(TEXT_PROVIDERS) do
+                    if p == cur_text then idx = i; break end
+                end
+                local next_tp = TEXT_PROVIDERS[(idx % #TEXT_PROVIDERS) + 1]
+                cfg.text_provider = next_tp
+                CardStorage.save_anki_settings(cfg)
+                if on_saved then on_saved(cfg) end
+                UIManager:close(dlg)
+                show_settings_dialog()
+            end,
+        }})
+
         -- Image provider toggle.
         local IMAGE_PROVIDERS = { "dashscope", "gemini", "pollinations" }
         local cur_provider = cfg.image_provider or "dashscope"
