@@ -5,6 +5,17 @@ local CONFIGURATION = {
     provider          = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
     model             = "qwen-plus",
 
+    -- ── Image provider ────────────────────────────────────────────────────
+    -- Which service to use for image generation.
+    -- Options: "dashscope" (default, requires dashscope_api_key),
+    --          "gemini" (free tier: 500 imgs/day, requires gemini_api_key),
+    --          "pollinations" (free, no API key, but unreliable)
+    image_provider = "dashscope",
+
+    -- ── Gemini (Google) — used for image generation only ─────────────────
+    -- Free tier: ~500 images/day. Get your key at: https://aistudio.google.com/apikey
+    gemini_api_key = "YOUR_GEMINI_API_KEY",
+
     -- ── ElevenLabs TTS (optional — generates audio for Anki cards) ─────────
     elevenlabs_api_key  = "YOUR_ELEVENLABS_API_KEY",
     elevenlabs_voice_id = "JBFqnCBsd6RMkjVDRZzb",  -- Rachel (default)
