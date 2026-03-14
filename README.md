@@ -25,9 +25,10 @@ Developed and tested on a **Kobo Libra Colour** and a **Kindle** running KOReade
 ## Requirements
 
 - A Kobo e-reader running [KOReader](https://github.com/koreader/koreader)
-- A [DashScope API key](https://www.alibabacloud.com/help/en/model-studio/get-api-key) (Qwen)
+- A [DashScope API key](https://www.alibabacloud.com/help/en/model-studio/get-api-key) (Qwen) — required for card text generation
 - [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on installed in Anki (for sending cards)
 - The **English** note type in Anki (see [Note Type](#note-type) below)
+- *(Optional)* A [Gemini API key](https://aistudio.google.com/apikey) for image generation via Google Gemini Flash
 - *(Optional)* An [ElevenLabs API key](https://elevenlabs.io/) for TTS audio on cards
 
 ## AI Provider: Qwen via DashScope
@@ -150,6 +151,27 @@ ElevenLabs charges per character. A typical card generates ~100–200 characters
 
 > The free tier includes 10,000 characters/month (~50–100 cards).
 
+## Image Generation Providers
+
+The plugin supports multiple image generation providers. You can switch providers on-device via **Anki Settings → Image Provider**.
+
+| Provider | Cost | API Key | Notes |
+|----------|------|---------|-------|
+| **DashScope** (default) | ~$0.03/image | Required | Qwen image-plus, async polling |
+| **Gemini Flash** | $0.039/image | Required | Google Gemini 2.5 Flash, fast and reliable |
+| **Pollinations** | Free | None | No API key needed, but may be unreliable |
+
+### Setting up Gemini
+
+1. Get a free API key at [Google AI Studio](https://aistudio.google.com/apikey)
+2. Enable billing on your Google Cloud project (required for image generation, even at low usage)
+3. On the Kobo, go to **Anki Settings → Gemini API Key** and paste your key
+4. Switch **Image Provider** to `gemini`
+
+### Setting up Pollinations
+
+No setup needed — just switch **Image Provider** to `pollinations`. No API key required. Note that the Pollinations API can be unreliable at times.
+
 ## Configuration via Settings UI
 
-You can also set the Anki URL, deck, tags, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
+You can set the Anki URL, deck, tags, image provider, API keys, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
