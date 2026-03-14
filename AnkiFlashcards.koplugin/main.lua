@@ -34,6 +34,10 @@ do
     if saved_anki then
         CONFIGURATION = CONFIGURATION or {}
         CONFIGURATION.anki = saved_anki
+        -- Promote plugin-level settings from saved anki settings to top level.
+        if saved_anki.image_provider then
+            CONFIGURATION.image_provider = saved_anki.image_provider
+        end
     end
 end
 

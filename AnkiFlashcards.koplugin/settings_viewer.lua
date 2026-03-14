@@ -119,6 +119,27 @@ function SettingsViewer.show(base_config, on_saved)
             }})
         end
 
+        -- Image provider toggle.
+        local IMAGE_PROVIDERS = { "dashscope", "pollinations" }
+        local cur_provider = cfg.image_provider or "dashscope"
+        local provider_label = _("Image Provider: ") .. cur_provider
+        table.insert(buttons, {{
+            text     = provider_label,
+            callback = function()
+                -- Cycle to next provider.
+                local idx = 1
+                for i, p in ipairs(IMAGE_PROVIDERS) do
+                    if p == cur_provider then idx = i; break end
+                end
+                local next_provider = IMAGE_PROVIDERS[(idx % #IMAGE_PROVIDERS) + 1]
+                cfg.image_provider = next_provider
+                CardStorage.save_anki_settings(cfg)
+                if on_saved then on_saved(cfg) end
+                UIManager:close(dlg)
+                show_settings_dialog()
+            end,
+        }})
+
         -- Auto-Send on WiFi toggle (opt-in, disabled by default).
         local auto_label = cfg.auto_send_wifi
                            and _("Auto-Send on WiFi: ON (tap to disable)")

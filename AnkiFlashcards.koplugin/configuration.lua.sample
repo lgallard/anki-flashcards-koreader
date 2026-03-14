@@ -5,6 +5,12 @@ local CONFIGURATION = {
     provider          = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
     model             = "qwen-plus",
 
+    -- ── Image provider ────────────────────────────────────────────────────
+    -- Which service to use for image generation.
+    -- Options: "dashscope" (default, requires dashscope_api_key),
+    --          "pollinations" (free, no API key needed)
+    image_provider = "dashscope",
+
     -- ── ElevenLabs TTS (optional — generates audio for Anki cards) ─────────
     elevenlabs_api_key  = "YOUR_ELEVENLABS_API_KEY",
     elevenlabs_voice_id = "JBFqnCBsd6RMkjVDRZzb",  -- Rachel (default)
