@@ -36,6 +36,7 @@ do
         CONFIGURATION.anki = saved_anki
         -- Promote plugin-level settings from saved anki settings to top level.
         for _, key in ipairs({
+            "text_provider",
             "image_provider",
             "dashscope_api_key",
             "gemini_api_key",

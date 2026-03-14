@@ -31,9 +31,13 @@ Developed and tested on a **Kobo Libra Colour** and a **Kindle** running KOReade
 - *(Optional)* A [Gemini API key](https://aistudio.google.com/apikey) for image generation via Google Gemini Flash
 - *(Optional)* An [ElevenLabs API key](https://elevenlabs.io/) for TTS audio on cards
 
-## AI Provider: Qwen via DashScope
+## AI Providers
 
-This plugin uses **Qwen** (by Alibaba Cloud) for all AI generation — card text, IPA, and images.
+The plugin supports multiple AI providers for both text and image generation. You can mix providers — e.g. use Gemini for text and DashScope for images.
+
+### Qwen via DashScope (default)
+
+DashScope is the default provider for both text and image generation.
 
 To get an API key:
 
@@ -63,6 +67,16 @@ The plugin uses two DashScope APIs: **qwen-plus** for text and **qwen-image-plus
 | 300 | ~$9.00 |
 
 > Prices based on [DashScope international pricing](https://www.alibabacloud.com/help/en/model-studio/model-pricing) (Singapore region): qwen-plus at $0.40/$1.20 per 1M input/output tokens, qwen-image-plus at $0.03/image.
+
+### Google Gemini Flash (alternative)
+
+[Gemini 2.5 Flash](https://ai.google.dev/gemini-api) can be used for both text and image generation. A single API key covers both. Text generation on the free tier is generous (~500 RPD); image generation requires billing.
+
+To set up:
+
+1. Get an API key at [Google AI Studio](https://aistudio.google.com/apikey)
+2. On the Kobo, go to **Anki Settings → Gemini API Key** and paste your key
+3. Switch **Text Provider** to `gemini` and/or **Image Provider** to `gemini`
 
 ## Installation
 
@@ -151,22 +165,15 @@ ElevenLabs charges per character. A typical card generates ~100–200 characters
 
 > The free tier includes 10,000 characters/month (~50–100 cards).
 
-## Image Generation Providers
+## Provider Summary
 
-The plugin supports multiple image generation providers. You can switch providers on-device via **Anki Settings → Image Provider**.
+Switch providers on-device via **Anki Settings** — Text Provider and Image Provider can be set independently.
 
-| Provider | Cost | API Key | Notes |
-|----------|------|---------|-------|
-| **DashScope** (default) | ~$0.03/image | Required | Qwen image-plus, async polling |
-| **Gemini Flash** | $0.039/image | Required | Google Gemini 2.5 Flash, fast and reliable |
-| **Pollinations** | Free | None | No API key needed, but may be unreliable |
-
-### Setting up Gemini
-
-1. Get a free API key at [Google AI Studio](https://aistudio.google.com/apikey)
-2. Enable billing on your Google Cloud project (required for image generation, even at low usage)
-3. On the Kobo, go to **Anki Settings → Gemini API Key** and paste your key
-4. Switch **Image Provider** to `gemini`
+| Provider | Text | Image | Cost (text) | Cost (image) | API Key |
+|----------|:----:|:-----:|-------------|-------------|---------|
+| **DashScope** (default) | yes | yes | ~free | ~$0.03/image | Required |
+| **Gemini Flash** | yes | yes | ~free (free tier) | $0.039/image | Required |
+| **Pollinations** | - | yes | - | Free | None |
 
 ### Setting up Pollinations
 
@@ -174,4 +181,4 @@ No setup needed — just switch **Image Provider** to `pollinations`. No API key
 
 ## Configuration via Settings UI
 
-You can set the Anki URL, deck, tags, image provider, API keys, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
+You can set the Anki URL, deck, tags, text/image providers, API keys, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
