@@ -35,8 +35,15 @@ do
         CONFIGURATION = CONFIGURATION or {}
         CONFIGURATION.anki = saved_anki
         -- Promote plugin-level settings from saved anki settings to top level.
-        if saved_anki.image_provider then
-            CONFIGURATION.image_provider = saved_anki.image_provider
+        for _, key in ipairs({
+            "image_provider",
+            "dashscope_api_key",
+            "gemini_api_key",
+            "elevenlabs_api_key",
+        }) do
+            if saved_anki[key] then
+                CONFIGURATION[key] = saved_anki[key]
+            end
         end
     end
 end

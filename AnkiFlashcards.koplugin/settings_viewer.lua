@@ -120,7 +120,7 @@ function SettingsViewer.show(base_config, on_saved)
         end
 
         -- Image provider toggle.
-        local IMAGE_PROVIDERS = { "dashscope", "pollinations" }
+        local IMAGE_PROVIDERS = { "dashscope", "gemini", "pollinations" }
         local cur_provider = cfg.image_provider or "dashscope"
         local provider_label = _("Image Provider: ") .. cur_provider
         table.insert(buttons, {{
@@ -139,6 +139,59 @@ function SettingsViewer.show(base_config, on_saved)
                 show_settings_dialog()
             end,
         }})
+
+        -- ── API Keys section ─────────────────────────────────────────────
+        local API_KEY_FIELDS = {
+            { key = "dashscope_api_key",  label = "DashScope API Key" },
+            { key = "gemini_api_key",     label = "Gemini API Key" },
+            { key = "elevenlabs_api_key", label = "ElevenLabs API Key" },
+        }
+
+        local function mask_key(k)
+            if not k or k == "" or k:find("^YOUR_") then return "(not set)" end
+            if #k <= 8 then return string.rep("*", #k) end
+            return string.rep("*", #k - 4) .. k:sub(-4)
+        end
+
+        for _idx, akf in ipairs(API_KEY_FIELDS) do
+            local aref = akf
+            local raw = cfg[aref.key] or ""
+            table.insert(buttons, {{
+                text     = aref.label .. ": " .. mask_key(raw),
+                callback = function()
+                    UIManager:close(dlg)
+                    local key_dlg
+                    key_dlg = InputDialog:new {
+                        title      = _(aref.label),
+                        input      = (raw:find("^YOUR_") and "" or raw),
+                        input_hint = _("Paste your API key here"),
+                        buttons    = {{
+                            {
+                                text     = _("Cancel"),
+                                callback = function()
+                                    UIManager:close(key_dlg)
+                                    show_settings_dialog()
+                                end,
+                            },
+                            {
+                                text             = _("Save"),
+                                is_enter_default = true,
+                                callback         = function()
+                                    local new_key = key_dlg:getInputText() or ""
+                                    UIManager:close(key_dlg)
+                                    cfg[aref.key] = new_key
+                                    CardStorage.save_anki_settings(cfg)
+                                    if on_saved then on_saved(cfg) end
+                                    show_settings_dialog()
+                                end,
+                            },
+                        }},
+                    }
+                    UIManager:show(key_dlg)
+                    key_dlg:onShowKeyboard()
+                end,
+            }})
+        end
 
         -- Auto-Send on WiFi toggle (opt-in, disabled by default).
         local auto_label = cfg.auto_send_wifi

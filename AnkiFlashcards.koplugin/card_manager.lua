@@ -115,8 +115,15 @@ function CardManager.show_manage(base_config, opts)
                 SettingsViewer.show(base_config, function(new_cfg)
                     for k, v in pairs(new_cfg) do anki_config[k] = v end
                     -- Promote plugin-level settings to the top-level config.
-                    if new_cfg.image_provider then
-                        base_config.image_provider = new_cfg.image_provider
+                    for _, key in ipairs({
+                        "image_provider",
+                        "dashscope_api_key",
+                        "gemini_api_key",
+                        "elevenlabs_api_key",
+                    }) do
+                        if new_cfg[key] then
+                            base_config[key] = new_cfg[key]
+                        end
                     end
                 end)
             end,
