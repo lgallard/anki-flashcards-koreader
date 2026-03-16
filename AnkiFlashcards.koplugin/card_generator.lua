@@ -69,7 +69,7 @@ local function call_llm(config, prompt)
         if provider == "openrouter" then
             api_key  = config.openrouter_api_key or ""
             endpoint = "https://openrouter.ai/api/v1/chat/completions"
-            model    = config.openrouter_model or "anthropic/claude-haiku"
+            model    = config.openrouter_model or "anthropic/claude-3-haiku"
         else
             api_key  = config.dashscope_api_key or config.api_key or ""
             endpoint = config.provider or ""

@@ -14,7 +14,7 @@ local CONFIGURATION = {
     -- Get your key at: https://openrouter.ai/keys
     -- Browse models at: https://openrouter.ai/models
     openrouter_api_key = "YOUR_OPENROUTER_API_KEY",
-    openrouter_model   = "anthropic/claude-haiku",  -- cost-effective default
+    openrouter_model   = "anthropic/claude-3-haiku",  -- cost-effective default
 
     -- ── Text provider ─────────────────────────────────────────────────────
     -- Which service to use for card text generation (definitions, IPA, etc.).
