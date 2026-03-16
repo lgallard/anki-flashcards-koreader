@@ -3,7 +3,8 @@
 -- Supported providers:
 --   dashscope    — Alibaba DashScope (Qwen Wanx). Requires API key.
 --   pollinations — Pollinations.ai (Flux). Free, no API key needed.
---   gemini       — Google Gemini Flash. Free tier (500 imgs/day). Requires API key.
+--   gemini       — Google Gemini Flash. Requires API key + billing.
+--   openai       — OpenAI (GPT Image, DALL-E). Requires API key.
 --
 -- Provider is selected via config.image_provider (default: "dashscope").
 --
@@ -428,12 +429,173 @@ local function gemini_generate(config, image_prompt, phrase, on_success, on_erro
     end)
 end
 
+-- ── OpenAI image provider ──────────────────────────────────────────────────
+
+-- Background POST helper — runs API call + image extraction in a luajit
+-- subprocess so the UI thread is never blocked.
+local POST_HELPER = "/tmp/anki_post_image.lua"
+
+local function ensure_post_helper()
+    local f = io.open(POST_HELPER, "r")
+    if f then f:close() return true end
+    f = io.open(POST_HELPER, "w")
+    if not f then return false end
+    f:write([=[
+require("setupkoenv")
+local https = require("ssl.https")
+local ltn12  = require("ltn12")
+local json   = require("json")
+local mime   = require("mime")
+https.TIMEOUT = 60
+local body_file, api_key, save_path, done_file = arg[1], arg[2], arg[3], arg[4]
+-- Read request body from temp file.
+local bf = io.open(body_file, "r")
+if not bf then
+    local d = io.open(done_file, "w"); if d then d:write("error") d:close() end; return
+end
+local body = bf:read("*a"); bf:close(); os.remove(body_file)
+-- Make the API call.
+local r = {}
+local _, c = https.request{
+    url     = "https://api.openai.com/v1/images/generations",
+    method  = "POST",
+    headers = {
+        ["Content-Type"]  = "application/json",
+        ["Authorization"] = "Bearer " .. api_key,
+        ["Content-Length"] = tostring(#body),
+    },
+    source = ltn12.source.string(body),
+    sink   = ltn12.sink.table(r),
+}
+c = tostring(c)
+if c == "200" then
+    local ok, data = pcall(json.decode, table.concat(r))
+    if ok and data and data.data and data.data[1] then
+        local b64 = data.data[1].b64_json
+        local url = data.data[1].url
+        if b64 then
+            local bytes = mime.unb64(b64)
+            if bytes then
+                local out = io.open(save_path, "wb")
+                if out then out:write(bytes) out:close() end
+            end
+        elseif url then
+            local img = {}
+            local _, ic = https.request{url = url, sink = ltn12.sink.table(img)}
+            if tostring(ic) == "200" then
+                local out = io.open(save_path, "wb")
+                if out then out:write(table.concat(img)) out:close() end
+            end
+        end
+    end
+end
+local d = io.open(done_file, "w")
+if d then d:write(c) d:close() end
+]=])
+    f:close()
+    return true
+end
+
+local function openai_generate(config, image_prompt, phrase, on_success, on_error)
+    local api_key = config and config.openai_api_key
+    if not api_key or api_key == "" then
+        if on_error then on_error("OpenAI API key not configured") end
+        return
+    end
+
+    local UIManager = require("ui/uimanager")
+    local save_path = make_save_path(phrase)
+    ensure_image_dir()
+
+    if not ensure_post_helper() then
+        if on_error then on_error("Cannot create image helper") end
+        return
+    end
+
+    local prompt =
+        "Modern anime-style illustration: " .. (image_prompt or "") ..
+        ". Widescreen 16:9 composition, vibrant colors, clean lines, " ..
+        "professional quality. No text, words, letters or numbers anywhere."
+
+    local body = json.encode({
+        model  = config.openai_image_model or "gpt-image-1",
+        prompt = prompt,
+        n      = 1,
+        size   = "1536x1024",
+    })
+
+    -- Write request body to a temp file for the subprocess.
+    local body_file = save_path .. ".body"
+    local done_file = save_path .. ".done"
+    os.remove(body_file)
+    os.remove(done_file)
+    os.remove(save_path)
+
+    local bf = io.open(body_file, "w")
+    if not bf then
+        if on_error then on_error("Cannot write request body") end
+        return
+    end
+    bf:write(body)
+    bf:close()
+
+    -- Launch luajit in the background.
+    os.execute(string.format(
+        "./luajit '%s' '%s' '%s' '%s' '%s' &",
+        POST_HELPER, body_file, api_key, save_path, done_file
+    ))
+
+    local attempts = 0
+    local max_attempts = 30  -- 30 × 3s = 90s
+    local function poll()
+        attempts = attempts + 1
+
+        local f = io.open(done_file, "r")
+        if f then
+            local code = f:read("*a"):match("%d+")
+            f:close()
+            os.remove(done_file)
+
+            if code == "200" then
+                local img = io.open(save_path, "rb")
+                if img then
+                    local size = img:seek("end")
+                    img:close()
+                    if size and size > 100 then
+                        if on_success then on_success(save_path) end
+                        return
+                    end
+                end
+                os.remove(save_path)
+                if on_error then on_error("OpenAI returned empty image") end
+            else
+                os.remove(save_path)
+                if on_error then on_error("OpenAI HTTP " .. (code or "error")) end
+            end
+            return
+        end
+
+        if attempts >= max_attempts then
+            os.remove(done_file)
+            os.remove(save_path)
+            os.remove(body_file)
+            if on_error then on_error("Image generation timed out") end
+            return
+        end
+
+        UIManager:scheduleIn(3, poll)
+    end
+
+    UIManager:scheduleIn(3, poll)
+end
+
 -- ── Provider dispatch ───────────────────────────────────────────────────────
 
 local PROVIDERS = {
     dashscope    = dashscope_generate,
     pollinations = pollinations_generate,
     gemini       = gemini_generate,
+    openai       = openai_generate,
 }
 
 -- ── Public API ──────────────────────────────────────────────────────────────

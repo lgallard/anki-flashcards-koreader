@@ -29,7 +29,8 @@ Developed and tested on a **Kobo Libra Colour** and a **Kindle** running KOReade
 - A [DashScope API key](https://www.alibabacloud.com/help/en/model-studio/get-api-key) (Qwen) — required for card text generation
 - [AnkiConnect](https://ankiweb.net/shared/info/2055492159) add-on installed in Anki (for sending cards)
 - The **English** note type in Anki (see [Note Type](#note-type) below)
-- *(Optional)* A [Gemini API key](https://aistudio.google.com/apikey) for image generation via Google Gemini Flash
+- *(Optional)* A [Gemini API key](https://aistudio.google.com/apikey) for text/image generation via Google Gemini Flash
+- *(Optional)* An [OpenAI API key](https://platform.openai.com/api-keys) for text (GPT-4o-mini) and image (GPT Image) generation
 - *(Optional)* An [ElevenLabs API key](https://elevenlabs.io/) for TTS audio on cards
 
 ## AI Providers
@@ -78,6 +79,16 @@ To set up:
 1. Get an API key at [Google AI Studio](https://aistudio.google.com/apikey)
 2. On the Kobo, go to **Anki Settings → Gemini API Key** and paste your key
 3. Switch **Text Provider** to `gemini` and/or **Image Provider** to `gemini`
+
+### OpenAI (alternative — text + image)
+
+[OpenAI](https://openai.com/) provides GPT-4o-mini for text generation and GPT Image / DALL-E for image generation. A single API key covers both.
+
+To set up:
+
+1. Get an API key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. On the Kobo, go to **Anki Settings → API Keys → OpenAI** and paste your key
+3. Switch **Text Provider** to `openai` and/or **Image Provider** to `openai`
 
 ### OpenRouter (alternative — text only)
 
@@ -193,12 +204,15 @@ ElevenLabs charges per character. A typical card generates ~100–200 characters
 
 Switch providers on-device via **Anki Settings** — Text Provider and Image Provider can be set independently.
 
-| Provider | Text | Image | Cost (text) | Cost (image) | API Key |
-|----------|:----:|:-----:|-------------|-------------|---------|
-| **DashScope** (default) | yes | yes | ~free | ~$0.03/image | Required |
-| **Gemini Flash** | yes | yes | ~free (free tier) | $0.039/image | Required |
-| **OpenRouter** | yes | - | varies by model | - | Required |
-| **Pollinations** | - | yes | - | Free | None |
+| Provider | Text | Image | Cost (text) | Cost (image) | Image Speed | API Key |
+|----------|:----:|:-----:|-------------|-------------|-------------|---------|
+| **DashScope** (default) | yes | yes | ~free | ~$0.03/image | ~10-15s | Required |
+| **Gemini Flash** | yes | yes | ~free (free tier) | $0.039/image | ~5-10s | Required |
+| **OpenAI** | yes | yes | ~$0.01/card | $0.005–0.05/image | ~20-40s | Required |
+| **OpenRouter** | yes | - | varies by model | - | - | Required |
+| **Pollinations** | - | yes | - | Free | unreliable | None |
+
+> **Tip:** You can mix providers — e.g. use OpenAI for text and Gemini for images to get the best speed/cost trade-off.
 
 ### Setting up Pollinations
 

@@ -5,6 +5,7 @@
 --   dashscope  (default) — Qwen via DashScope (OpenAI-compatible)
 --   gemini               — Google Gemini Flash
 --   openrouter           — OpenRouter gateway (any model)
+--   openai               — OpenAI (GPT-4o-mini, GPT-4o, etc.)
 
 local https  = require("ssl.https")
 local http   = require("socket.http")
@@ -64,9 +65,13 @@ local function call_llm(config, prompt)
         end
         return nil, "No text in Gemini response"
     else
-        -- DashScope / OpenRouter / OpenAI-compatible
+        -- DashScope / OpenRouter / OpenAI / OpenAI-compatible
         local api_key, endpoint, model
-        if provider == "openrouter" then
+        if provider == "openai" then
+            api_key  = config.openai_api_key or ""
+            endpoint = "https://api.openai.com/v1/chat/completions"
+            model    = config.openai_model or "gpt-4o-mini"
+        elseif provider == "openrouter" then
             api_key  = config.openrouter_api_key or ""
             endpoint = "https://openrouter.ai/api/v1/chat/completions"
             model    = config.openrouter_model or "anthropic/claude-3-haiku"
