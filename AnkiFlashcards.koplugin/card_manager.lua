@@ -121,6 +121,7 @@ function CardManager.show_manage(base_config, opts)
                         "image_provider",
                         "dashscope_api_key",
                         "gemini_api_key",
+                        "openai_api_key",
                         "openrouter_api_key",
                         "openrouter_model",
                         "elevenlabs_api_key",

@@ -10,6 +10,10 @@ local CONFIGURATION = {
     -- Billing must be enabled for image generation.
     gemini_api_key = "YOUR_GEMINI_API_KEY",
 
+    -- ── OpenAI — GPT-4o-mini for text, GPT Image / DALL-E for images ──────
+    -- Get your key at: https://platform.openai.com/api-keys
+    openai_api_key = "YOUR_OPENAI_API_KEY",
+
     -- ── OpenRouter — access to hundreds of models via one API key ─────────
     -- Get your key at: https://openrouter.ai/keys
     -- Browse models at: https://openrouter.ai/models
@@ -23,13 +27,14 @@ local CONFIGURATION = {
 
     -- ── Text provider ─────────────────────────────────────────────────────
     -- Which service to use for card text generation (definitions, IPA, etc.).
-    -- Options: "dashscope" (default), "gemini", "openrouter"
+    -- Options: "dashscope" (default), "gemini", "openai", "openrouter"
     text_provider = "dashscope",
 
     -- ── Image provider ────────────────────────────────────────────────────
     -- Which service to use for image generation.
     -- Options: "dashscope" (default, requires dashscope_api_key),
     --          "gemini" (requires gemini_api_key + billing),
+    --          "openai" (requires openai_api_key),
     --          "pollinations" (free, no API key, but unreliable)
     image_provider = "dashscope",
 

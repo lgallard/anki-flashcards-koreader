@@ -210,8 +210,8 @@ function SettingsViewer.show(base_config, on_saved)
     show_ai_providers = function()
         local sub_dlg
 
-        local TEXT_PROVIDERS  = { "dashscope", "gemini", "openrouter" }
-        local IMAGE_PROVIDERS = { "dashscope", "gemini", "pollinations" }
+        local TEXT_PROVIDERS  = { "dashscope", "gemini", "openai", "openrouter" }
+        local IMAGE_PROVIDERS = { "dashscope", "gemini", "openai", "pollinations" }
 
         local function cycle(key, options)
             local cur = cfg[key] or options[1]
@@ -246,6 +246,7 @@ function SettingsViewer.show(base_config, on_saved)
         local API_KEY_FIELDS = {
             { key = "dashscope_api_key",  label = "DashScope" },
             { key = "gemini_api_key",     label = "Gemini" },
+            { key = "openai_api_key",     label = "OpenAI" },
             { key = "openrouter_api_key", label = "OpenRouter" },
             { key = "elevenlabs_api_key", label = "ElevenLabs" },
         }
