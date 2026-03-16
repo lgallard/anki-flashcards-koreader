@@ -224,22 +224,6 @@ function CardGenerator.generate(config, phrase, context, title, author)
         :gsub("{phrase}",  function() return p end)
         :gsub("{context}", function() return c end)
 
-    local NetworkMgr = require("ui/network/manager")
-    if not NetworkMgr:isOnline() then
-        -- Offline — try local dictionary for a partial card.
-        local entry = dictionary_lookup(phrase)
-        if entry then
-            return {
-                phrase     = (phrase or ""):lower(),
-                ipa        = "",
-                definition = entry.definition,
-                synonyms   = "",
-                text       = "",
-            }
-        end
-        return nil, "Offline — no local dictionary entry found"
-    end
-
     local raw_text, err = call_llm(config, prompt)
     if not raw_text then return nil, err end
     return parse_response(raw_text)
