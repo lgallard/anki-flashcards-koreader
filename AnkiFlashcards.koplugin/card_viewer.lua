@@ -234,21 +234,29 @@ function CardViewer:init()
 
     local content_widget
 
-    -- Build a scaled ImageWidget (16:9, max 40% of content height).
+    -- Build a scaled ImageWidget (scale to width, max 40% of content height).
     -- Tapping the image opens a full-screen zoomable viewer.
     local function make_image_widget(image_path)
         if not image_path or image_path == "" then return nil, 0 end
-        local natural_h = math.floor(inner_w * 9 / 16)
-        local max_h     = math.floor(total_content_h * 0.40)
-        local img_h     = math.min(natural_h, max_h)
-        local img_w     = (img_h == natural_h) and inner_w
-                          or math.floor(img_h * 16 / 9)
+        local max_h = math.floor(total_content_h * 0.40)
+        -- Scale to full width; let ImageWidget compute the natural height.
         local img = ImageWidget:new {
             file         = image_path,
-            width        = img_w,
-            height       = img_h,
+            width        = inner_w,
             scale_factor = 0,
         }
+        local img_h = img:getSize().h
+        -- If the image is taller than 40% of content area, re-create with a height cap.
+        if img_h > max_h then
+            img:free()
+            img = ImageWidget:new {
+                file         = image_path,
+                width        = inner_w,
+                height       = max_h,
+                scale_factor = 0,
+            }
+            img_h = max_h
+        end
         self._tap_image_widget = img
         self._tap_image_path   = image_path
         return img, img_h
