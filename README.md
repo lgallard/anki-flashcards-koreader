@@ -204,13 +204,15 @@ ElevenLabs charges per character. A typical card generates ~100–200 characters
 
 Switch providers on-device via **Anki Settings** — Text Provider and Image Provider can be set independently.
 
-| Provider | Text | Image | Cost (text) | Cost (image) | API Key |
-|----------|:----:|:-----:|-------------|-------------|---------|
-| **DashScope** (default) | yes | yes | ~free | ~$0.03/image | Required |
-| **Gemini Flash** | yes | yes | ~free (free tier) | $0.039/image | Required |
-| **OpenAI** | yes | yes | ~$0.01/card | $0.005–0.05/image | Required |
-| **OpenRouter** | yes | - | varies by model | - | Required |
-| **Pollinations** | - | yes | - | Free | None |
+| Provider | Text | Image | Cost (text) | Cost (image) | Image Speed | API Key |
+|----------|:----:|:-----:|-------------|-------------|-------------|---------|
+| **DashScope** (default) | yes | yes | ~free | ~$0.03/image | ~10-15s | Required |
+| **Gemini Flash** | yes | yes | ~free (free tier) | $0.039/image | ~5-10s | Required |
+| **OpenAI** | yes | yes | ~$0.01/card | $0.005–0.05/image | ~20-40s | Required |
+| **OpenRouter** | yes | - | varies by model | - | - | Required |
+| **Pollinations** | - | yes | - | Free | unreliable | None |
+
+> **Tip:** You can mix providers — e.g. use OpenAI for text and Gemini for images to get the best speed/cost trade-off.
 
 ### Setting up Pollinations
 
