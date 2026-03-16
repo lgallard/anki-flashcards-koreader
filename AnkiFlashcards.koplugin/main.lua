@@ -505,9 +505,9 @@ function AnkiFlashcards:init()
                     end
                 end
 
-                NetworkMgr:runWhenOnline(function()
-                    UIManager:scheduleIn(0.05, function() do_generate(2) end)
-                end)
+                -- Try generating directly — works offline via dictionary fallback.
+                -- Only prompt for WiFi if we're offline and have no dictionary result.
+                UIManager:scheduleIn(0.05, function() do_generate(2) end)
             end,
         }
     end)
@@ -682,10 +682,6 @@ function AnkiFlashcards:init()
                             return true
                         end
 
-                        if not NetworkMgr:isOnline() then
-                            -- Offline: fall through to normal highlight menu.
-                            break
-                        end
                         local loading = Notification:new {
                             text    = _("Looking up: ") .. phrase_text,
                             timeout = 15,
