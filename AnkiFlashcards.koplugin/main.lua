@@ -36,6 +36,7 @@ do
         CONFIGURATION.anki = saved_anki
         -- Promote plugin-level settings from saved anki settings to top level.
         for _, key in ipairs({
+            "target_language",
             "text_provider",
             "image_provider",
             "dashscope_api_key",
@@ -69,6 +70,8 @@ local function capitalize_first(s)
 end
 
 local function cambridge_url(phrase)
+    local lang = CONFIGURATION and CONFIGURATION.target_language or "English"
+    if lang ~= "English" then return nil end
     local slug = (phrase or ""):lower():gsub("%s+", "-")
     return "https://dictionary.cambridge.org/dictionary/english/" .. slug
 end

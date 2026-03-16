@@ -116,6 +116,7 @@ function CardManager.show_manage(base_config, opts)
                     for k, v in pairs(new_cfg) do anki_config[k] = v end
                     -- Promote plugin-level settings to the top-level config.
                     for _, key in ipairs({
+                        "target_language",
                         "text_provider",
                         "image_provider",
                         "dashscope_api_key",

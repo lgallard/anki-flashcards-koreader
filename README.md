@@ -10,7 +10,8 @@ A KOReader plugin that generates AI-powered Anki flashcards from highlighted tex
 
 - **One-tap card generation** — highlight any word, phrase, idiom, or phrasal verb and generate a complete Anki card in seconds
 - **Context-aware definitions** — the AI sees the surrounding sentence, so definitions reflect how the phrase is actually used
-- **Full card content** — canonical phrase (normalized to base form), American English IPA, definition, synonyms, cloze sentence, and AI-generated image
+- **Multi-language support** — generate cards in any language (English, Spanish, French, German, Japanese, etc.) with language-appropriate pronunciation notation (IPA, pinyin, romaji)
+- **Full card content** — canonical phrase (normalized to base form), pronunciation, definition, synonyms, cloze sentence, and AI-generated image
 - **My Cards** — browse all saved cards on-device, filter by book, tap to review, hold to send or delete
 - **Anki Manage** — bulk send unsent cards, stats by book, batch import from all highlights in a book
 - **AnkiConnect integration** — send cards directly to Anki over Wi-Fi, synced to all your devices
@@ -88,6 +89,18 @@ To set up:
 2. On the Kobo, go to **Anki Settings → OpenRouter API Key** and paste your key
 3. Switch **Text Provider** to `openrouter`
 4. Optionally set the model in `configuration.lua` via `openrouter_model` (default: `anthropic/claude-haiku`). Browse models at [openrouter.ai/models](https://openrouter.ai/models)
+
+## Multi-Language Support
+
+The plugin supports any language the AI model can handle. By default it generates English flashcards, but you can change the target language on-device via **Anki Settings → Language**.
+
+When set to a non-English language:
+- **Definitions** are generated in the target language using simple vocabulary
+- **Pronunciation** adapts automatically: IPA for European languages, pinyin for Mandarin, romaji for Japanese
+- **Synonyms** and **cloze sentences** are in the target language
+- **Cambridge Dictionary URL** is skipped (only available for English)
+
+Supported languages include: English, Spanish, French, German, Italian, Portuguese, Chinese, Japanese, Korean, Russian, Arabic, and any other language the AI provider supports.
 
 ## Installation
 
