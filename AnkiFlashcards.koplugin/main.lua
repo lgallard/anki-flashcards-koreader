@@ -174,6 +174,8 @@ local function show_quick_lookup_popup(phrase, lookup, on_delete)
     }
 
     -- Add a "Delete Highlight" button if a delete callback is provided.
+    -- popup_ref is set after the popup widget is created (below).
+    local popup_ref = {}
     if on_delete then
         local btn_table = ButtonTable:new {
             width = inner_w,
@@ -181,6 +183,7 @@ local function show_quick_lookup_popup(phrase, lookup, on_delete)
                 {
                     text     = _("Delete Highlight"),
                     callback = function()
+                        if popup_ref[1] then UIManager:close(popup_ref[1]) end
                         on_delete()
                     end,
                 },
@@ -223,6 +226,7 @@ local function show_quick_lookup_popup(phrase, lookup, on_delete)
         return true
     end
 
+    popup_ref[1] = popup
     UIManager:show(popup)
 end
 
@@ -684,16 +688,11 @@ function AnkiFlashcards:init()
                         local phrase_text = ann.text
                         local ann_ref     = ann
                         local ui_ref      = hl_self.ui
-                        local hl_ref      = hl_self
+                        local hl_idx      = box.index
 
                         -- Delete callback: removes the highlight via KOReader's API.
                         local function delete_highlight()
-                            local Event = require("ui/event")
-                            ui_ref:handleEvent(Event:new("DelHighlight", ann_ref))
-                            UIManager:show(Notification:new {
-                                text = _("Highlight deleted"),
-                                timeout = 2,
-                            })
+                            hl_self:deleteHighlight(hl_idx)
                         end
 
                         -- Check annotation note for a previously saved lookup.
