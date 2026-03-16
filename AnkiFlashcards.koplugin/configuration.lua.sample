@@ -10,9 +10,15 @@ local CONFIGURATION = {
     -- Billing must be enabled for image generation.
     gemini_api_key = "YOUR_GEMINI_API_KEY",
 
+    -- ── OpenRouter — access to hundreds of models via one API key ─────────
+    -- Get your key at: https://openrouter.ai/keys
+    -- Browse models at: https://openrouter.ai/models
+    openrouter_api_key = "YOUR_OPENROUTER_API_KEY",
+    openrouter_model   = "anthropic/claude-haiku",  -- cost-effective default
+
     -- ── Text provider ─────────────────────────────────────────────────────
     -- Which service to use for card text generation (definitions, IPA, etc.).
-    -- Options: "dashscope" (default), "gemini"
+    -- Options: "dashscope" (default), "gemini", "openrouter"
     text_provider = "dashscope",
 
     -- ── Image provider ────────────────────────────────────────────────────

@@ -120,7 +120,7 @@ function SettingsViewer.show(base_config, on_saved)
         end
 
         -- Text provider toggle.
-        local TEXT_PROVIDERS = { "dashscope", "gemini" }
+        local TEXT_PROVIDERS = { "dashscope", "gemini", "openrouter" }
         local cur_text = cfg.text_provider or "dashscope"
         local text_label = _("Text Provider: ") .. cur_text
         table.insert(buttons, {{
@@ -164,6 +164,7 @@ function SettingsViewer.show(base_config, on_saved)
         local API_KEY_FIELDS = {
             { key = "dashscope_api_key",  label = "DashScope API Key" },
             { key = "gemini_api_key",     label = "Gemini API Key" },
+            { key = "openrouter_api_key", label = "OpenRouter API Key" },
             { key = "elevenlabs_api_key", label = "ElevenLabs API Key" },
         }
 

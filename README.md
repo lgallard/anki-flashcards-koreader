@@ -78,6 +78,17 @@ To set up:
 2. On the Kobo, go to **Anki Settings → Gemini API Key** and paste your key
 3. Switch **Text Provider** to `gemini` and/or **Image Provider** to `gemini`
 
+### OpenRouter (alternative — text only)
+
+[OpenRouter](https://openrouter.ai/) is an API gateway that gives access to hundreds of models (Claude, GPT-4, Llama, Mistral, Gemma, etc.) through a single API key. Text generation only — pair with an image provider.
+
+To set up:
+
+1. Get an API key at [openrouter.ai/keys](https://openrouter.ai/keys)
+2. On the Kobo, go to **Anki Settings → OpenRouter API Key** and paste your key
+3. Switch **Text Provider** to `openrouter`
+4. Optionally set the model in `configuration.lua` via `openrouter_model` (default: `anthropic/claude-haiku`). Browse models at [openrouter.ai/models](https://openrouter.ai/models)
+
 ## Installation
 
 1. Copy the `AnkiFlashcards.koplugin/` folder to your Kobo's plugin directory:
@@ -173,6 +184,7 @@ Switch providers on-device via **Anki Settings** — Text Provider and Image Pro
 |----------|:----:|:-----:|-------------|-------------|---------|
 | **DashScope** (default) | yes | yes | ~free | ~$0.03/image | Required |
 | **Gemini Flash** | yes | yes | ~free (free tier) | $0.039/image | Required |
+| **OpenRouter** | yes | - | varies by model | - | Required |
 | **Pollinations** | - | yes | - | Free | None |
 
 ### Setting up Pollinations

@@ -40,6 +40,8 @@ do
             "image_provider",
             "dashscope_api_key",
             "gemini_api_key",
+            "openrouter_api_key",
+            "openrouter_model",
             "elevenlabs_api_key",
         }) do
             if saved_anki[key] then
