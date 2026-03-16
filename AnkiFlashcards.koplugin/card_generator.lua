@@ -149,8 +149,10 @@ local function dictionary_lookup(word)
     if not word or word == "" then return nil end
     -- Shell-safe: single quotes with inner quotes escaped.
     local safe = word:gsub("'", "'\\''")
-    local handle = io.popen("./sdcv --json-output --utf8-input --exact-search '"
-                            .. safe .. "' 2>/dev/null")
+    local dict_dir = os.getenv("STARDICT_DATA_DIR") or "data/dict"
+    local handle = io.popen("./sdcv --json-output --utf8-input --exact-search"
+                            .. " --data-dir '" .. dict_dir .. "'"
+                            .. " '" .. safe .. "' 2>/dev/null")
     if not handle then return nil end
     local output = handle:read("*a")
     handle:close()
