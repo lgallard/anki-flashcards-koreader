@@ -2,8 +2,9 @@
 -- returns a structured card table.
 --
 -- Supported text providers (config.text_provider):
---   dashscope (default) — Qwen via DashScope (OpenAI-compatible)
---   gemini              — Google Gemini Flash
+--   dashscope  (default) — Qwen via DashScope (OpenAI-compatible)
+--   gemini               — Google Gemini Flash
+--   openrouter           — OpenRouter gateway (any model)
 
 local https  = require("ssl.https")
 local http   = require("socket.http")
@@ -63,15 +64,23 @@ local function call_llm(config, prompt)
         end
         return nil, "No text in Gemini response"
     else
-        -- DashScope / OpenAI-compatible
-        local api_key = config.dashscope_api_key or config.api_key or ""
+        -- DashScope / OpenRouter / OpenAI-compatible
+        local api_key, endpoint, model
+        if provider == "openrouter" then
+            api_key  = config.openrouter_api_key or ""
+            endpoint = "https://openrouter.ai/api/v1/chat/completions"
+            model    = config.openrouter_model or "anthropic/claude-3-haiku"
+        else
+            api_key  = config.dashscope_api_key or config.api_key or ""
+            endpoint = config.provider or ""
+            model    = config.model or "qwen-plus"
+        end
         if api_key == "" then return nil, "API key not configured" end
-        local endpoint = config.provider
-        if not endpoint or endpoint == "" then
+        if endpoint == "" then
             endpoint = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
         end
         local body = json.encode({
-            model    = config.model or "qwen-plus",
+            model    = model,
             messages = {{ role = "user", content = prompt }},
         })
         https.TIMEOUT = TIMEOUT
