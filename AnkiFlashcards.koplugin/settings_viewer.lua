@@ -13,10 +13,6 @@ local CardSync       = require("card_sync")
 
 local SettingsViewer = {}
 
--- Show the settings dialog. base_config is the full CONFIGURATION table
--- from main.lua (with nested .anki subtable).
--- on_saved(new_cfg) is called after every field save so the caller can update
--- its live copy.
 function SettingsViewer.show(base_config, on_saved)
     -- Extract the anki subtable from the full config.
     local anki_base = base_config
@@ -62,6 +58,10 @@ function SettingsViewer.show(base_config, on_saved)
         CardStorage.save_anki_settings(cfg)
         if on_saved then on_saved(cfg) end
     end
+
+    -- Forward declarations for submenu functions.
+    local show_main, show_anki_connection, show_ai_providers
+    local show_api_keys, show_audio, show_sync
 
     -- Helper: show an InputDialog for editing a text field.
     local function edit_field(title, key, hint, parent_fn, transform)
@@ -132,37 +132,17 @@ function SettingsViewer.show(base_config, on_saved)
         edit_dlg:onShowKeyboard()
     end
 
-    -- Helper: cycle through a list of options for a toggle setting.
-    local function make_cycle_button(label_prefix, key, options, parent_fn)
-        local cur = cfg[key] or options[1]
-        return {{
-            text     = _(label_prefix) .. cur,
-            callback = function()
-                local idx = 1
-                for i, p in ipairs(options) do
-                    if p == cur then idx = i; break end
-                end
-                cfg[key] = options[(idx % #options) + 1]
-                save()
-                UIManager:close(parent_fn._dlg)
-                parent_fn()
-            end,
-        }}
-    end
-
     -- ── Submenu: Anki Connection ─────────────────────────────────────────
 
-    local function show_anki_connection()
+    show_anki_connection = function()
         local sub_dlg
         local buttons = {}
 
-        -- Read-only note type.
         table.insert(buttons, {{
             text     = _("Note type: English (fixed)"),
             callback = function() end,
         }})
 
-        -- Editable fields.
         local ANKI_FIELDS = {
             { key = "url",  label = "AnkiConnect URL", hint = "http://192.168.x.x:8765" },
             { key = "deck", label = "Deck",            hint = "English::Koreader" },
@@ -193,7 +173,6 @@ function SettingsViewer.show(base_config, on_saved)
             }})
         end
 
-        -- Test connection.
         table.insert(buttons, {{
             text     = _("Test Connection"),
             callback = function()
@@ -228,38 +207,41 @@ function SettingsViewer.show(base_config, on_saved)
 
     -- ── Submenu: AI Providers ────────────────────────────────────────────
 
-    local function show_ai_providers()
+    show_ai_providers = function()
         local sub_dlg
-        show_ai_providers = function()
-            local buttons = {}
-            show_ai_providers._dlg = nil
 
-            table.insert(buttons, make_cycle_button(
-                "Text: ", "text_provider",
-                { "dashscope", "gemini", "openrouter" }, show_ai_providers))
+        local TEXT_PROVIDERS  = { "dashscope", "gemini", "openrouter" }
+        local IMAGE_PROVIDERS = { "dashscope", "gemini", "pollinations" }
 
-            table.insert(buttons, make_cycle_button(
-                "Image: ", "image_provider",
-                { "dashscope", "gemini", "pollinations" }, show_ai_providers))
-
-            table.insert(buttons, {{
-                text     = _("Back"),
-                callback = function() UIManager:close(sub_dlg); show_main() end,
-            }})
-
-            sub_dlg = ButtonDialog:new {
-                title   = _("AI Providers"),
-                buttons = buttons,
-            }
-            show_ai_providers._dlg = sub_dlg
-            UIManager:show(sub_dlg)
+        local function cycle(key, options)
+            local cur = cfg[key] or options[1]
+            local idx = 1
+            for i, p in ipairs(options) do
+                if p == cur then idx = i; break end
+            end
+            cfg[key] = options[(idx % #options) + 1]
+            save()
+            UIManager:close(sub_dlg)
+            show_ai_providers()
         end
-        show_ai_providers()
+
+        sub_dlg = ButtonDialog:new {
+            title   = _("AI Providers"),
+            buttons = {
+                {{ text = _("Text: ") .. (cfg.text_provider or "dashscope"),
+                   callback = function() cycle("text_provider", TEXT_PROVIDERS) end }},
+                {{ text = _("Image: ") .. (cfg.image_provider or "dashscope"),
+                   callback = function() cycle("image_provider", IMAGE_PROVIDERS) end }},
+                {{ text = _("Back"),
+                   callback = function() UIManager:close(sub_dlg); show_main() end }},
+            },
+        }
+        UIManager:show(sub_dlg)
     end
 
     -- ── Submenu: API Keys ────────────────────────────────────────────────
 
-    local function show_api_keys()
+    show_api_keys = function()
         local sub_dlg
         local API_KEY_FIELDS = {
             { key = "dashscope_api_key",  label = "DashScope" },
@@ -294,105 +276,78 @@ function SettingsViewer.show(base_config, on_saved)
 
     -- ── Submenu: Audio (TTS) ─────────────────────────────────────────────
 
-    local function show_audio()
+    show_audio = function()
         local sub_dlg
-        show_audio = function()
-            local buttons = {}
-            show_audio._dlg = nil
+        local tts_label = cfg.tts_enabled
+            and _("TTS Audio: ON")
+            or  _("TTS Audio: OFF")
 
-            local tts_label = cfg.tts_enabled
-                and _("TTS Audio: ON")
-                or  _("TTS Audio: OFF")
-            table.insert(buttons, {{
-                text     = tts_label,
-                callback = function()
-                    cfg.tts_enabled = not cfg.tts_enabled
-                    save()
-                    UIManager:close(sub_dlg)
-                    show_audio()
-                end,
-            }})
-
-            table.insert(buttons, {{
-                text     = _("Voice ID: ") .. short("elevenlabs_voice_id"),
-                callback = function()
-                    UIManager:close(sub_dlg)
-                    edit_field("ElevenLabs Voice ID", "elevenlabs_voice_id",
-                              "JBFqnCBsd6RMkjVDRZzb", show_audio)
-                end,
-            }})
-
-            table.insert(buttons, {{
-                text     = _("Back"),
-                callback = function() UIManager:close(sub_dlg); show_main() end,
-            }})
-
-            sub_dlg = ButtonDialog:new {
-                title   = _("Audio (TTS)"),
-                buttons = buttons,
-            }
-            show_audio._dlg = sub_dlg
-            UIManager:show(sub_dlg)
-        end
-        show_audio()
+        sub_dlg = ButtonDialog:new {
+            title   = _("Audio (TTS)"),
+            buttons = {
+                {{ text = tts_label,
+                   callback = function()
+                       cfg.tts_enabled = not cfg.tts_enabled
+                       save()
+                       UIManager:close(sub_dlg)
+                       show_audio()
+                   end }},
+                {{ text = _("Voice ID: ") .. short("elevenlabs_voice_id"),
+                   callback = function()
+                       UIManager:close(sub_dlg)
+                       edit_field("ElevenLabs Voice ID", "elevenlabs_voice_id",
+                                 "JBFqnCBsd6RMkjVDRZzb", show_audio)
+                   end }},
+                {{ text = _("Back"),
+                   callback = function() UIManager:close(sub_dlg); show_main() end }},
+            },
+        }
+        UIManager:show(sub_dlg)
     end
 
     -- ── Submenu: Sync ────────────────────────────────────────────────────
 
-    local function show_sync()
+    show_sync = function()
         local sub_dlg
-        show_sync = function()
-            local buttons = {}
-            show_sync._dlg = nil
+        local auto_label = cfg.auto_send_wifi
+            and _("Auto-Send on WiFi: ON")
+            or  _("Auto-Send on WiFi: OFF")
 
-            local auto_label = cfg.auto_send_wifi
-                and _("Auto-Send on WiFi: ON")
-                or  _("Auto-Send on WiFi: OFF")
-            table.insert(buttons, {{
-                text     = auto_label,
-                callback = function()
-                    cfg.auto_send_wifi = not cfg.auto_send_wifi
-                    save()
-                    UIManager:close(sub_dlg)
-                    show_sync()
-                end,
-            }})
-
-            local sync_name
-            if cfg.sync_server then
-                sync_name = cfg.sync_server.name or cfg.sync_server.address or "Cloud"
-            end
-            table.insert(buttons, {{
-                text     = sync_name and (_("Cloud Sync: ") .. sync_name)
-                                      or _("Cloud Sync: (not configured)"),
-                callback = function()
-                    UIManager:close(sub_dlg)
-                    CardSync.show_cloud_sync_dialog(cfg, function(new_cfg)
-                        cfg = new_cfg
-                        save()
-                        show_sync()
-                    end)
-                end,
-            }})
-
-            table.insert(buttons, {{
-                text     = _("Back"),
-                callback = function() UIManager:close(sub_dlg); show_main() end,
-            }})
-
-            sub_dlg = ButtonDialog:new {
-                title   = _("Sync"),
-                buttons = buttons,
-            }
-            show_sync._dlg = sub_dlg
-            UIManager:show(sub_dlg)
+        local sync_name
+        if cfg.sync_server then
+            sync_name = cfg.sync_server.name or cfg.sync_server.address or "Cloud"
         end
-        show_sync()
+
+        sub_dlg = ButtonDialog:new {
+            title   = _("Sync"),
+            buttons = {
+                {{ text = auto_label,
+                   callback = function()
+                       cfg.auto_send_wifi = not cfg.auto_send_wifi
+                       save()
+                       UIManager:close(sub_dlg)
+                       show_sync()
+                   end }},
+                {{ text = sync_name and (_("Cloud Sync: ") .. sync_name)
+                                     or _("Cloud Sync: (not configured)"),
+                   callback = function()
+                       UIManager:close(sub_dlg)
+                       CardSync.show_cloud_sync_dialog(cfg, function(new_cfg)
+                           cfg = new_cfg
+                           save()
+                           show_sync()
+                       end)
+                   end }},
+                {{ text = _("Back"),
+                   callback = function() UIManager:close(sub_dlg); show_main() end }},
+            },
+        }
+        UIManager:show(sub_dlg)
     end
 
     -- ── Main settings screen ─────────────────────────────────────────────
 
-    function show_main()
+    show_main = function()
         local cur_text  = cfg.text_provider  or "dashscope"
         local cur_image = cfg.image_provider or "dashscope"
 
