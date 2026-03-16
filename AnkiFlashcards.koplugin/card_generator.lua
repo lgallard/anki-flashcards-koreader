@@ -150,23 +150,31 @@ local function dictionary_lookup(word)
     -- Shell-safe: single quotes with inner quotes escaped.
     local safe = word:gsub("'", "'\\''")
     local dict_dir = os.getenv("STARDICT_DATA_DIR") or "data/dict"
-    local handle = io.popen("./sdcv --json-output --utf8-input --exact-search"
-                            .. " --data-dir '" .. dict_dir .. "'"
-                            .. " '" .. safe .. "' 2>/dev/null")
-    if not handle then return nil end
-    local output = handle:read("*a")
-    handle:close()
-    if not output or output == "" then return nil end
-    local ok, results = pcall(json.decode, output)
-    if not ok or type(results) ~= "table" then return nil end
-    for _i, entry in ipairs(results) do
-        if entry.definition and entry.definition ~= "" then
-            -- Strip HTML tags for plain-text display.
-            local def = entry.definition:gsub("<[^>]+>", "")
-            -- Collapse whitespace and trim.
-            def = def:gsub("%s+", " "):match("^%s*(.-)%s*$")
-            if def ~= "" then
-                return { definition = def, dict = entry.dict or "" }
+    -- Try exact match first, then fuzzy if no result.
+    for _pass, flag in ipairs({"--exact-search", ""}) do
+        local cmd = "./sdcv --json-output --utf8-input --non-interactive"
+                    .. " --data-dir '" .. dict_dir .. "'"
+                    .. (flag ~= "" and (" " .. flag) or "")
+                    .. " '" .. safe .. "' 2>/dev/null"
+        local handle = io.popen(cmd)
+        if handle then
+            local output = handle:read("*a")
+            handle:close()
+            if output and output ~= "" then
+                local ok, results = pcall(json.decode, output)
+                if ok and type(results) == "table" then
+                    for _j, entry in ipairs(results) do
+                        if entry.definition and entry.definition ~= "" then
+                            -- Strip HTML tags for plain-text display.
+                            local def = entry.definition:gsub("<[^>]+>", "")
+                            -- Collapse whitespace and trim.
+                            def = def:gsub("%s+", " "):match("^%s*(.-)%s*$")
+                            if def ~= "" then
+                                return { definition = def, dict = entry.dict or "" }
+                            end
+                        end
+                    end
+                end
             end
         end
     end
