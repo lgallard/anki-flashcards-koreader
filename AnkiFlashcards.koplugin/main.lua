@@ -118,8 +118,9 @@ local quick_lookup_cache = {}
 local PTF_BOLD_ON  = "\xEF\xBF\xB2"
 local PTF_BOLD_OFF = "\xEF\xBF\xB3"
 
-local function show_quick_lookup_popup(phrase, lookup)
+local function show_quick_lookup_popup(phrase, lookup, on_delete)
     local Blitbuffer      = require("ffi/blitbuffer")
+    local ButtonTable     = require("ui/widget/buttontable")
     local CenterContainer = require("ui/widget/container/centercontainer")
     local Font            = require("ui/font")
     local FrameContainer  = require("ui/widget/container/framecontainer")
@@ -171,6 +172,24 @@ local function show_quick_lookup_popup(phrase, lookup)
         VerticalSpan:new { width = Size.padding.default },
         def_w,
     }
+
+    -- Add a "Delete Highlight" button if a delete callback is provided.
+    if on_delete then
+        local btn_table = ButtonTable:new {
+            width = inner_w,
+            buttons = {{
+                {
+                    text     = _("Delete Highlight"),
+                    callback = function()
+                        on_delete()
+                    end,
+                },
+            }},
+            zero_sep = true,
+        }
+        content[#content + 1] = VerticalSpan:new { width = Size.padding.large }
+        content[#content + 1] = btn_table
+    end
 
     local frame = FrameContainer:new {
         background   = Blitbuffer.COLOR_WHITE,
@@ -665,20 +684,31 @@ function AnkiFlashcards:init()
                         local phrase_text = ann.text
                         local ann_ref     = ann
                         local ui_ref      = hl_self.ui
+                        local hl_ref      = hl_self
+
+                        -- Delete callback: removes the highlight via KOReader's API.
+                        local function delete_highlight()
+                            local Event = require("ui/event")
+                            ui_ref:handleEvent(Event:new("DelHighlight", ann_ref))
+                            UIManager:show(Notification:new {
+                                text = _("Highlight deleted"),
+                                timeout = 2,
+                            })
+                        end
 
                         -- Check annotation note for a previously saved lookup.
                         if ann_ref.note and ann_ref.note:match("^%[IPA%]") then
                             local ipa = ann_ref.note:match("%[IPA%] (.-) | ")
                             local def = ann_ref.note:match("| (.+)$")
                             if ipa and def then
-                                show_quick_lookup_popup(phrase_text, { ipa = ipa, definition = def })
+                                show_quick_lookup_popup(phrase_text, { ipa = ipa, definition = def }, delete_highlight)
                                 return true
                             end
                         end
 
                         -- Check session cache.
                         if quick_lookup_cache[phrase_text] then
-                            show_quick_lookup_popup(phrase_text, quick_lookup_cache[phrase_text])
+                            show_quick_lookup_popup(phrase_text, quick_lookup_cache[phrase_text], delete_highlight)
                             return true
                         end
 
@@ -704,7 +734,7 @@ function AnkiFlashcards:init()
                                 local Event = require("ui/event")
                                 ui_ref:handleEvent(Event:new("AnnotationsModified",
                                     { ann_ref, nb_highlights_added = 0, nb_notes_added = 1 }))
-                                show_quick_lookup_popup(phrase_text, result)
+                                show_quick_lookup_popup(phrase_text, result, delete_highlight)
                             else
                                 UIManager:show(Notification:new {
                                     text    = _("Lookup failed: ") .. (err or "unknown"),
