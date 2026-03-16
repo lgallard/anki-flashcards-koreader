@@ -29,7 +29,9 @@ local function capitalize_first(s)
     return (s:gsub("^%l", string.upper))
 end
 
-local function cambridge_url(phrase)
+local function cambridge_url(phrase, config)
+    local lang = config and config.target_language or "English"
+    if lang ~= "English" then return nil end
     local slug = (phrase or ""):lower():gsub("%s+", "-")
     return "https://dictionary.cambridge.org/dictionary/english/" .. slug
 end
@@ -114,7 +116,7 @@ local function show_menu(ui, config, highlights, already_carded, selected)
                         config, phrase, phrase, title, author
                     )
                     if card then
-                        card.source      = cambridge_url(card.phrase)
+                        card.source      = cambridge_url(card.phrase, config)
                         card.book_title  = title
                         card.book_author = author
                         CardStorage.save_card(card)

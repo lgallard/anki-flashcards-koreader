@@ -16,6 +16,11 @@ local CONFIGURATION = {
     openrouter_api_key = "YOUR_OPENROUTER_API_KEY",
     openrouter_model   = "anthropic/claude-3-haiku",  -- cost-effective default
 
+    -- ── Target language ────────────────────────────────────────────────────
+    -- Language for flashcard generation (definitions, pronunciation, cloze).
+    -- Default: "English". Examples: "Spanish", "French", "German", "Japanese"
+    target_language = "English",
+
     -- ── Text provider ─────────────────────────────────────────────────────
     -- Which service to use for card text generation (definitions, IPA, etc.).
     -- Options: "dashscope" (default), "gemini", "openrouter"

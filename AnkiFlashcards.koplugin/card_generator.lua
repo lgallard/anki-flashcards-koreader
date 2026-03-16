@@ -113,7 +113,8 @@ end
 -- ── Prompt templates ──────────────────────────────────────────────────────
 
 -- Single-call prompt: returns raw JSON, no markdown fences.
-local PROMPT_TEMPLATE = [[You are an English flashcard generator for an advanced learner reading "{title}" by "{author}".
+-- {language} is replaced at call time with config.target_language.
+local PROMPT_TEMPLATE = [[You are a {language} flashcard generator for an advanced learner reading "{title}" by "{author}".
 Highlighted: "{phrase}"
 Context: "...{context}..."
 
@@ -123,21 +124,21 @@ understand the meaning of the highlighted text.
 
 Return ONLY a valid JSON object, no other text:
 {
-  "phrase": "<canonical form of EXACTLY the highlighted text, all lowercase: (1) use infinitive/base form — e.g. 'cranked up' → 'crank up'; (2) replace specific pronouns (him, her, them, me, us, it) with 'someone' or 'something' as appropriate; NEVER substitute a different phrase from the context>",
-  "ipa": "<American English IPA of the canonical phrase, e.g. /ˈwɜːrd/>",
-  "definition": "<context-aware definition using simple everyday words (B2–C1 level), max 20 words; the definition itself must NOT contain difficult or rare vocabulary>",
-  "synonyms": "<3-4 common, high-frequency synonyms for the canonical phrase, comma-separated; avoid rare or literary words>",
-  "text": "<example sentence at B2–C1 level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
+  "phrase": "<canonical form of EXACTLY the highlighted text, all lowercase: (1) use infinitive/base form — e.g. 'cranked up' → 'crank up'; (2) replace specific pronouns with generic equivalents as appropriate; NEVER substitute a different phrase from the context>",
+  "ipa": "<pronunciation notation for the canonical phrase — use IPA for European languages, pinyin for Mandarin, romaji for Japanese, or the standard phonetic notation for {language}>",
+  "definition": "<context-aware definition using simple everyday {language} words, max 20 words; the definition itself must NOT contain difficult or rare vocabulary>",
+  "synonyms": "<3-4 common, high-frequency synonyms in {language} for the canonical phrase, comma-separated; avoid rare or literary words>",
+  "text": "<example sentence in {language} at intermediate level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
 -- Sentence-only regeneration prompt: returns text (cloze) + image_prompt.
-local TEXT_REGEN_PROMPT = [[You are an English flashcard generator.
+local TEXT_REGEN_PROMPT = [[You are a {language} flashcard generator.
 Phrase: "{phrase}"
 
 Return ONLY a valid JSON object, no other text:
 {
-  "text": "<example sentence at B2–C1 level: use simple grammar and everyday vocabulary — the phrase must be the ONLY challenging word; create a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above (e.g. canonical 'batter someone' might appear as {{c1::battered}} in past tense); do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
+  "text": "<example sentence in {language} at intermediate level: use simple grammar and everyday vocabulary — the phrase must be the ONLY challenging word; create a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
@@ -174,15 +175,17 @@ end
 function CardGenerator.generate(config, phrase, context, title, author)
     -- Use function-form replacement to prevent % in values being treated as
     -- gsub pattern specials (e.g. book text containing "100%").
+    local lang = config.target_language or "English"
     local t = escape_for_prompt(title   or "Unknown")
     local a = escape_for_prompt(author  or "Unknown")
     local p = escape_for_prompt(phrase  or "")
     local c = escape_for_prompt(context or "")
     local prompt = PROMPT_TEMPLATE
-        :gsub("{title}",   function() return t end)
-        :gsub("{author}",  function() return a end)
-        :gsub("{phrase}",  function() return p end)
-        :gsub("{context}", function() return c end)
+        :gsub("{language}", function() return lang end)
+        :gsub("{title}",    function() return t end)
+        :gsub("{author}",   function() return a end)
+        :gsub("{phrase}",   function() return p end)
+        :gsub("{context}",  function() return c end)
 
     local raw_text, err = call_llm(config, prompt)
     if not raw_text then return nil, err end
@@ -192,9 +195,11 @@ end
 -- Regenerate only the example sentence and image prompt for a phrase.
 -- Returns (text, image_prompt) or (nil, error_string).
 function CardGenerator.generate_text(config, phrase)
+    local lang = config.target_language or "English"
     local p = escape_for_prompt(phrase or "")
     local prompt = TEXT_REGEN_PROMPT
-        :gsub("{phrase}", function() return p end)
+        :gsub("{language}", function() return lang end)
+        :gsub("{phrase}",   function() return p end)
 
     local raw_text, err = call_llm(config, prompt)
     if not raw_text then return nil, err end
@@ -205,24 +210,29 @@ function CardGenerator.generate_text(config, phrase)
     return nil, "Unexpected API response"
 end
 
--- Generate IPA only for a given phrase. Returns (ipa_string, nil) or (nil, error).
+-- Generate pronunciation only for a given phrase. Returns (string, nil) or (nil, error).
 function CardGenerator.generate_ipa(config, phrase)
-    local prompt = 'Return ONLY the American English IPA for: "'
-                   .. (phrase or "")
-                   .. '"\nReply with just the IPA notation, nothing else. Example: /ɪɡˈzæmpəl/'
+    local lang = config.target_language or "English"
+    local prompt = 'Return ONLY the pronunciation notation for the '
+                   .. lang .. ' phrase: "' .. (phrase or "")
+                   .. '"\nUse IPA for European languages, pinyin for Mandarin, '
+                   .. 'romaji for Japanese, or the standard notation for ' .. lang
+                   .. '.\nReply with just the notation, nothing else. Example: /ɪɡˈzæmpəl/'
 
     local raw_text, err = call_llm(config, prompt)
     if not raw_text then return nil, err end
     return raw_text:match("^%s*(.-)%s*$")  -- trim whitespace
 end
 
--- Quick lookup: IPA + short definition only (for purple highlight tap).
+-- Quick lookup: pronunciation + short definition only (for purple highlight tap).
 -- Returns ({ipa, definition}, nil) or (nil, error_string).
 function CardGenerator.generate_quick_lookup(config, phrase)
+    local lang = config.target_language or "English"
     local p = escape_for_prompt(phrase or "")
-    local prompt = 'You are an English dictionary. Return ONLY valid JSON for: "' .. p .. '"\n'
-                .. '{"ipa": "<American English IPA, e.g. /ɪɡˈzæmpəl/>", '
-                .. '"definition": "<simple, clear definition in everyday English, max 15 words>"}'
+    local prompt = 'You are a ' .. lang .. ' dictionary. Return ONLY valid JSON for: "' .. p .. '"\n'
+                .. '{"ipa": "<pronunciation notation — IPA for European languages, '
+                .. 'pinyin for Mandarin, romaji for Japanese, or standard for ' .. lang .. '>", '
+                .. '"definition": "<simple, clear definition in everyday ' .. lang .. ', max 15 words>"}'
 
     local raw_text, err = call_llm(config, prompt)
     if not raw_text then return nil, err end

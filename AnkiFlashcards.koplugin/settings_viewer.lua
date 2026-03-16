@@ -348,13 +348,20 @@ function SettingsViewer.show(base_config, on_saved)
     -- ── Main settings screen ─────────────────────────────────────────────
 
     show_main = function()
-        local cur_text  = cfg.text_provider  or "dashscope"
-        local cur_image = cfg.image_provider or "dashscope"
+        local cur_lang  = cfg.target_language or "English"
+        local cur_text  = cfg.text_provider   or "dashscope"
+        local cur_image = cfg.image_provider  or "dashscope"
 
         local dlg
         dlg = ButtonDialog:new {
             title   = _("Anki Settings"),
             buttons = {
+                {{ text = _("Language: ") .. cur_lang,
+                   callback = function()
+                       UIManager:close(dlg)
+                       edit_field("Target Language", "target_language",
+                                 "English", show_main)
+                   end }},
                 {{ text = _("Anki Connection"),
                    callback = function() UIManager:close(dlg); show_anki_connection() end }},
                 {{ text = _("AI Providers") .. "  (" .. cur_text .. " / " .. cur_image .. ")",

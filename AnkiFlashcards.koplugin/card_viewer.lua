@@ -452,8 +452,8 @@ function CardViewer:editField(field_def)
                         local phrase_changed = field_def.key == "phrase"
                                                and new_val ~= old_phrase
                         if phrase_changed then
-                            self.card.source = "https://dictionary.cambridge.org/dictionary/english/"
-                                               .. new_val:lower():gsub("%s+", "-")
+                            local slug = new_val:lower():gsub("%s+", "-")
+                            self.card.source = "https://dictionary.cambridge.org/dictionary/english/" .. slug
                             self.card.ipa    = ""
                         end
                         if self.on_update then self.on_update(self.card) end
