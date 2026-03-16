@@ -141,6 +141,36 @@ Return ONLY a valid JSON object, no other text:
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
+-- ── Offline dictionary fallback ───────────────────────────────────────────
+
+-- Look up a word in KOReader's installed StarDict dictionaries via sdcv.
+-- Returns {definition, dict} or nil.
+local function dictionary_lookup(word)
+    if not word or word == "" then return nil end
+    -- Shell-safe: single quotes with inner quotes escaped.
+    local safe = word:gsub("'", "'\\''")
+    local handle = io.popen("./sdcv --json-output --utf8-input --exact-search '"
+                            .. safe .. "' 2>/dev/null")
+    if not handle then return nil end
+    local output = handle:read("*a")
+    handle:close()
+    if not output or output == "" then return nil end
+    local ok, results = pcall(json.decode, output)
+    if not ok or type(results) ~= "table" then return nil end
+    for _i, entry in ipairs(results) do
+        if entry.definition and entry.definition ~= "" then
+            -- Strip HTML tags for plain-text display.
+            local def = entry.definition:gsub("<[^>]+>", "")
+            -- Collapse whitespace and trim.
+            def = def:gsub("%s+", " "):match("^%s*(.-)%s*$")
+            if def ~= "" then
+                return { definition = def, dict = entry.dict or "" }
+            end
+        end
+    end
+    return nil
+end
+
 -- ── Helpers ───────────────────────────────────────────────────────────────
 
 local function escape_for_prompt(s)
@@ -184,6 +214,22 @@ function CardGenerator.generate(config, phrase, context, title, author)
         :gsub("{phrase}",  function() return p end)
         :gsub("{context}", function() return c end)
 
+    local NetworkMgr = require("ui/network/manager")
+    if not NetworkMgr:isOnline() then
+        -- Offline — try local dictionary for a partial card.
+        local entry = dictionary_lookup(phrase)
+        if entry then
+            return {
+                phrase     = (phrase or ""):lower(),
+                ipa        = "",
+                definition = entry.definition,
+                synonyms   = "",
+                text       = "",
+            }
+        end
+        return nil, "Offline — no local dictionary entry found"
+    end
+
     local raw_text, err = call_llm(config, prompt)
     if not raw_text then return nil, err end
     return parse_response(raw_text)
@@ -217,20 +263,34 @@ function CardGenerator.generate_ipa(config, phrase)
 end
 
 -- Quick lookup: IPA + short definition only (for purple highlight tap).
+-- Falls back to local StarDict dictionaries when offline or on LLM failure.
 -- Returns ({ipa, definition}, nil) or (nil, error_string).
 function CardGenerator.generate_quick_lookup(config, phrase)
-    local p = escape_for_prompt(phrase or "")
-    local prompt = 'You are an English dictionary. Return ONLY valid JSON for: "' .. p .. '"\n'
-                .. '{"ipa": "<American English IPA, e.g. /ɪɡˈzæmpəl/>", '
-                .. '"definition": "<simple, clear definition in everyday English, max 15 words>"}'
+    local NetworkMgr = require("ui/network/manager")
 
-    local raw_text, err = call_llm(config, prompt)
-    if not raw_text then return nil, err end
-    local result = parse_response(raw_text)
-    if result and result.ipa and result.definition then
-        return result
+    -- If online, try the LLM first.
+    if NetworkMgr:isOnline() then
+        local p = escape_for_prompt(phrase or "")
+        local prompt = 'You are an English dictionary. Return ONLY valid JSON for: "' .. p .. '"\n'
+                    .. '{"ipa": "<American English IPA, e.g. /ɪɡˈzæmpəl/>", '
+                    .. '"definition": "<simple, clear definition in everyday English, max 15 words>"}'
+        local raw_text = call_llm(config, prompt)
+        if raw_text then
+            local result = parse_response(raw_text)
+            if result and result.ipa and result.definition then
+                return result
+            end
+        end
     end
-    return nil, "Unexpected API response"
+
+    -- Offline or LLM failed — fall back to local dictionary.
+    local entry = dictionary_lookup(phrase)
+    if entry then
+        return { ipa = "", definition = entry.definition }
+    end
+    return nil, NetworkMgr:isOnline()
+        and "No definition found"
+        or  "Offline — no local dictionary entry found"
 end
 
 return CardGenerator
