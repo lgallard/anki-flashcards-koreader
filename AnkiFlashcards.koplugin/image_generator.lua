@@ -18,7 +18,7 @@ local json        = require("json")
 local mime        = require("mime")
 local DataStorage = require("datastorage")
 
-local IMAGE_DIR = DataStorage:getDataDir() .. "/anki_images"
+local IMAGE_DIR = DataStorage:getDataDir() .. "/.anki_images"
 
 local ImageGenerator = {}
 
