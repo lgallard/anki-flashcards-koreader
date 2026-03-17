@@ -61,7 +61,7 @@ function SettingsViewer.show(base_config, on_saved)
 
     -- Forward declarations for submenu functions.
     local show_main, show_anki_connection, show_ai_providers
-    local show_api_keys, show_audio, show_sync
+    local show_api_keys, show_ankivocab_gateway, show_audio, show_sync
 
     -- Helper: show an InputDialog for editing a text field.
     local function edit_field(title, key, hint, parent_fn, transform)
@@ -210,8 +210,8 @@ function SettingsViewer.show(base_config, on_saved)
     show_ai_providers = function()
         local sub_dlg
 
-        local TEXT_PROVIDERS  = { "dashscope", "gemini", "openai", "openrouter" }
-        local IMAGE_PROVIDERS = { "dashscope", "gemini", "openai", "pollinations" }
+        local TEXT_PROVIDERS  = { "dashscope", "gemini", "openai", "openrouter", "ankivocab" }
+        local IMAGE_PROVIDERS = { "dashscope", "gemini", "openai", "pollinations", "ankivocab" }
 
         local function cycle(key, options)
             local cur = cfg[key] or options[1]
@@ -271,6 +271,81 @@ function SettingsViewer.show(base_config, on_saved)
         sub_dlg = ButtonDialog:new {
             title   = _("API Keys"),
             buttons = buttons,
+        }
+        UIManager:show(sub_dlg)
+    end
+
+    -- ── Submenu: AnkiVocab Gateway ──────────────────────────────────────
+
+    show_ankivocab_gateway = function()
+        local sub_dlg
+
+        local function check_credits()
+            local api_url = cfg.ankivocab_url
+            local api_key = cfg.ankivocab_api_key
+            if not api_url or api_url == "" or not api_key or api_key == "" then
+                UIManager:show(Notification:new {
+                    text = _("Set AnkiVocab URL and API key first"),
+                    timeout = 3,
+                })
+                return
+            end
+            api_url = api_url:gsub("/$", "")
+            local https_req = require("ssl.https")
+            local ltn12_req = require("ltn12")
+            local json_req  = require("json")
+            local response = {}
+            https_req.TIMEOUT = 10
+            local _, code = https_req.request {
+                url     = api_url .. "/v1/auth/me",
+                method  = "GET",
+                headers = {
+                    ["X-API-Key"] = api_key,
+                },
+                sink = ltn12_req.sink.table(response),
+            }
+            if tostring(code) == "200" then
+                local ok, data = pcall(json_req.decode, table.concat(response))
+                if ok and data and data.credits then
+                    UIManager:show(Notification:new {
+                        text = _("Credits: ") .. tostring(data.credits) .. _(" remaining"),
+                        timeout = 5,
+                    })
+                else
+                    UIManager:show(Notification:new {
+                        text = _("Could not parse credits response"),
+                        timeout = 3,
+                    })
+                end
+            else
+                local detail = table.concat(response):sub(1, 100)
+                UIManager:show(Notification:new {
+                    text = _("Check failed: HTTP ") .. tostring(code) .. " " .. detail,
+                    timeout = 5,
+                })
+            end
+        end
+
+        sub_dlg = ButtonDialog:new {
+            title   = _("AnkiVocab Gateway"),
+            buttons = {
+                {{ text = _("URL: ") .. short("ankivocab_url"),
+                   callback = function()
+                       UIManager:close(sub_dlg)
+                       edit_field("AnkiVocab URL", "ankivocab_url",
+                                 "https://api.ankivocab.com", show_ankivocab_gateway)
+                   end }},
+                {{ text = _("API Key: ") .. mask_key(cfg.ankivocab_api_key or ""),
+                   callback = function()
+                       UIManager:close(sub_dlg)
+                       edit_key("AnkiVocab API Key", "ankivocab_api_key",
+                               show_ankivocab_gateway)
+                   end }},
+                {{ text = _("Check Credits"),
+                   callback = check_credits }},
+                {{ text = _("Back"),
+                   callback = function() UIManager:close(sub_dlg); show_main() end }},
+            },
         }
         UIManager:show(sub_dlg)
     end
@@ -369,6 +444,8 @@ function SettingsViewer.show(base_config, on_saved)
                    callback = function() UIManager:close(dlg); show_ai_providers() end }},
                 {{ text = _("API Keys"),
                    callback = function() UIManager:close(dlg); show_api_keys() end }},
+                {{ text = _("AnkiVocab Gateway"),
+                   callback = function() UIManager:close(dlg); show_ankivocab_gateway() end }},
                 {{ text = _("Audio (TTS)"),
                    callback = function() UIManager:close(dlg); show_audio() end }},
                 {{ text = _("Sync"),

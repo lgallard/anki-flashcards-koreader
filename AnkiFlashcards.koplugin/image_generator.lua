@@ -589,6 +589,32 @@ local function openai_generate(config, image_prompt, phrase, on_success, on_erro
     UIManager:scheduleIn(3, poll)
 end
 
+-- ── AnkiVocab provider (download pre-generated image from URL) ──────────────
+
+local function ankivocab_generate(config, image_prompt, phrase, on_success, on_error)
+    -- The image URL is passed via config._ankivocab_image_url, set by main.lua
+    -- from the API response's image_url field.
+    local image_url = config._ankivocab_image_url
+    if not image_url or image_url == "" then
+        if on_error then on_error("No image URL from AnkiVocab API") end
+        return
+    end
+
+    local UIManager = require("ui/uimanager")
+    local save_path = make_save_path(phrase)
+
+    UIManager:scheduleIn(0.5, function()
+        ensure_image_dir()
+        local ok, err = download_image(image_url, save_path)
+        if ok then
+            resize_image(save_path, 768, 432)
+            if on_success then on_success(save_path) end
+        else
+            if on_error then on_error(err or "Image download failed") end
+        end
+    end)
+end
+
 -- ── Provider dispatch ───────────────────────────────────────────────────────
 
 local PROVIDERS = {
@@ -596,6 +622,7 @@ local PROVIDERS = {
     pollinations = pollinations_generate,
     gemini       = gemini_generate,
     openai       = openai_generate,
+    ankivocab    = ankivocab_generate,
 }
 
 -- ── Public API ──────────────────────────────────────────────────────────────

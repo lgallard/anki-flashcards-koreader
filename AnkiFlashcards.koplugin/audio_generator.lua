@@ -21,6 +21,33 @@ local function strip_cloze(text)
     return (text:gsub("{{c%d+::(.-)}}", "%1"))
 end
 
+-- Download audio from a URL and return raw bytes.
+-- Used when AnkiVocab API generates audio server-side.
+-- Returns mp3_bytes (string) or nil, error_string.
+function AudioGenerator.download_url(url)
+    if not url or url == "" then
+        return nil, "No audio URL"
+    end
+    local response = {}
+    https.TIMEOUT = TIMEOUT
+    local requester = url:find("^https") and https or http
+    local ok, code = requester.request {
+        url  = url,
+        sink = ltn12.sink.table(response),
+    }
+    if not ok then
+        return nil, "Audio download failed: " .. tostring(code)
+    end
+    if tostring(code) ~= "200" then
+        return nil, "Audio download HTTP " .. tostring(code)
+    end
+    local mp3_bytes = table.concat(response)
+    if #mp3_bytes == 0 then
+        return nil, "Audio download returned empty data"
+    end
+    return mp3_bytes
+end
+
 -- Generate TTS audio for a card.
 -- config: table with elevenlabs_api_key, elevenlabs_voice_id (optional)
 -- card:   table with phrase, text fields

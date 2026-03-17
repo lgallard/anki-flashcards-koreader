@@ -20,6 +20,7 @@ local CardManager      = require("card_manager")
 local CardSync         = require("card_sync")
 local HighlightInbox   = require("highlight_inbox")
 local ImageGenerator   = require("image_generator")
+local AudioGenerator   = require("audio_generator")
 
 local MAX_HL    = 2000
 local MAX_TITLE = 100
@@ -45,6 +46,8 @@ do
             "openrouter_api_key",
             "openrouter_model",
             "elevenlabs_api_key",
+            "ankivocab_url",
+            "ankivocab_api_key",
         }) do
             if saved_anki[key] then
                 CONFIGURATION[key] = saved_anki[key]
@@ -327,11 +330,23 @@ function AnkiFlashcards:init()
                         return
                     end
 
-                    card.source         = cambridge_url(card.phrase)
+                    -- AnkiVocab returns its own source URL; other providers use Cambridge.
+                    if not card.source or card.source == "" then
+                        card.source = cambridge_url(card.phrase)
+                    end
                     card.book_title     = title
                     card.book_author    = author
                     card.highlight_pos0 = highlight_pos0
                     card.highlight_pos1 = highlight_pos1
+
+                    -- Handle audio URL from AnkiVocab (download MP3 immediately).
+                    if card._audio_url and card._audio_url ~= "" then
+                        local audio_bytes, audio_err = AudioGenerator.download_url(card._audio_url)
+                        if audio_bytes then
+                            card._audio_bytes = audio_bytes
+                        end
+                        card._audio_url = nil
+                    end
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
                     local viewer_ref = {}
@@ -513,9 +528,19 @@ function AnkiFlashcards:init()
                     viewer_ref[1] = initial_viewer
 
                     -- Start image generation in background.
-                    if card.image_prompt then
+                    -- When ankivocab returns an image URL, pass it to the image
+                    -- generator via a temporary config key.
+                    local img_config = CONFIGURATION
+                    if card._image_url and card._image_url ~= "" then
+                        img_config = {}
+                        for k, v in pairs(CONFIGURATION) do img_config[k] = v end
+                        img_config.image_provider = "ankivocab"
+                        img_config._ankivocab_image_url = card._image_url
+                        card._image_url = nil
+                    end
+                    if card.image_prompt or (img_config._ankivocab_image_url) then
                         ImageGenerator.generate_async(
-                            CONFIGURATION,
+                            img_config,
                             card.image_prompt,
                             card.phrase,
                             function(img_path)
