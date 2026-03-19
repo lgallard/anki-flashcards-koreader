@@ -161,27 +161,35 @@ function AnkiSync.send_card(config, card, tts_config)
         end)
     end
 
-    -- Generate and attach TTS audio if enabled.
-    local tts_api_key = tts_config and tts_config.elevenlabs_api_key
-    local tts_on      = (config and config.tts_enabled)
-                      or (tts_config and tts_config.tts_enabled)
-    if tts_on and tts_api_key and tts_api_key ~= "" then
+    -- Attach TTS audio. Use pre-downloaded bytes from AnkiVocab if available,
+    -- otherwise generate via ElevenLabs.
+    local mp3_bytes
+    if card._audio_bytes then
+        mp3_bytes = card._audio_bytes
+    else
+        local tts_api_key = tts_config and tts_config.elevenlabs_api_key
+        local tts_on      = (config and config.tts_enabled)
+                          or (tts_config and tts_config.tts_enabled)
+        if tts_on and tts_api_key and tts_api_key ~= "" then
+            pcall(function()
+                local AudioGenerator = require("audio_generator")
+                local tts_cfg = {
+                    elevenlabs_api_key  = tts_api_key,
+                    elevenlabs_voice_id = config.elevenlabs_voice_id
+                                          or (tts_config and tts_config.elevenlabs_voice_id),
+                }
+                mp3_bytes = AudioGenerator.generate(tts_cfg, card)
+            end)
+        end
+    end
+    if mp3_bytes then
         pcall(function()
-            local AudioGenerator = require("audio_generator")
-            local tts_cfg = {
-                elevenlabs_api_key  = tts_api_key,
-                elevenlabs_voice_id = config.elevenlabs_voice_id
-                                      or (tts_config and tts_config.elevenlabs_voice_id),
-            }
-            local mp3_bytes = AudioGenerator.generate(tts_cfg, card)
-            if mp3_bytes then
-                local b64         = base64_encode(mp3_bytes)
-                local phrase_slug = (card.phrase or "card"):gsub("[^%w]", "_"):lower()
-                local fname       = phrase_slug .. "_" .. tostring(os.time()) .. ".mp3"
-                local stored      = store_media_file(config.url, fname, b64)
-                if stored then
-                    fields["Sound"] = "[sound:" .. stored .. "]"
-                end
+            local b64         = base64_encode(mp3_bytes)
+            local phrase_slug = (card.phrase or "card"):gsub("[^%w]", "_"):lower()
+            local fname       = phrase_slug .. "_" .. tostring(os.time()) .. ".mp3"
+            local stored      = store_media_file(config.url, fname, b64)
+            if stored then
+                fields["Sound"] = "[sound:" .. stored .. "]"
             end
         end)
     end

@@ -6,6 +6,7 @@
 --   gemini               — Google Gemini Flash
 --   openrouter           — OpenRouter gateway (any model)
 --   openai               — OpenAI (GPT-4o-mini, GPT-4o, etc.)
+--   ankivocab            — AnkiVocab Gateway (server-side generation)
 
 local https  = require("ssl.https")
 local http   = require("socket.http")
@@ -132,7 +133,7 @@ Return ONLY a valid JSON object, no other text:
   "phrase": "<canonical form of EXACTLY the highlighted text, all lowercase: (1) use infinitive/base form — e.g. 'cranked up' → 'crank up'; (2) replace specific pronouns with generic equivalents as appropriate; NEVER substitute a different phrase from the context>",
   "ipa": "<pronunciation notation for the canonical phrase — use IPA for European languages, pinyin for Mandarin, romaji for Japanese, or the standard phonetic notation for {language}>",
   "definition": "<context-aware definition using simple everyday {language} words, max 20 words; the definition itself must NOT contain difficult or rare vocabulary>",
-  "synonyms": "<3-4 common, high-frequency synonyms in {language} for the canonical phrase, comma-separated; avoid rare or literary words>",
+  "synonyms": "<up to 3 common, high-frequency synonyms in {language} for the canonical phrase, comma-separated; avoid rare or literary words>",
   "text": "<example sentence in {language} at intermediate level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
@@ -172,12 +173,97 @@ local function parse_response(raw)
     return card
 end
 
+-- ── AnkiVocab Gateway provider ────────────────────────────────────────────
+
+-- Call the AnkiVocab API to generate a card server-side.
+-- Returns (card_table, nil) or (nil, error_string).
+local function generate_ankivocab(config, phrase, context, title, author)
+    local api_url = config.ankivocab_url
+    if not api_url or api_url == "" then
+        return nil, "AnkiVocab URL not configured"
+    end
+    local api_key = config.ankivocab_api_key
+    if not api_key or api_key == "" then
+        return nil, "AnkiVocab API key not configured"
+    end
+
+    -- Strip trailing slash from URL.
+    api_url = api_url:gsub("/$", "")
+    local endpoint = api_url .. "/v1/cards/generate"
+
+    local lang = config.target_language or "English"
+    -- Map language name to ISO code for target_lang.
+    local lang_codes = {
+        english = "en", spanish = "es", french = "fr", german = "de",
+        italian = "it", portuguese = "pt", chinese = "zh", japanese = "ja",
+        korean = "ko", russian = "ru", arabic = "ar", dutch = "nl",
+        swedish = "sv", turkish = "tr", polish = "pl",
+    }
+    local target_lang = lang_codes[lang:lower()] or "en"
+
+    local include_image = config.image_provider == "ankivocab"
+    local include_audio = config.tts_enabled or false
+
+    local body = json.encode({
+        word          = phrase,
+        context       = context,
+        target_lang   = target_lang,
+        include_image = include_image,
+        include_audio = include_audio,
+    })
+
+    local response_body = {}
+    local requester = endpoint:find("^https") and https or http
+    requester.TIMEOUT = 60
+    local _, code = requester.request {
+        url     = endpoint,
+        method  = "POST",
+        headers = {
+            ["Content-Type"]   = "application/json",
+            ["X-API-Key"]      = api_key,
+            ["Content-Length"]  = tostring(#body),
+        },
+        source = ltn12.source.string(body),
+        sink   = ltn12.sink.table(response_body),
+    }
+
+    if tostring(code) ~= "200" then
+        local detail = table.concat(response_body):sub(1, 300)
+        return nil, "AnkiVocab HTTP " .. tostring(code) .. ": " .. detail
+    end
+
+    local ok, data = pcall(json.decode, table.concat(response_body))
+    if not ok or not data then return nil, "AnkiVocab JSON decode error" end
+
+    -- Map API response fields to plugin card format.
+    local card = {
+        phrase       = data.phrase or phrase:lower(),
+        ipa          = data.ipa or "",
+        definition   = data.definition or "",
+        synonyms     = data.synonyms or "",
+        text         = data.text_cloze or "",
+        image_prompt = data.image_prompt or "",
+        source       = data.source or "",
+        -- Media URLs for later download by image/audio generators.
+        _image_url   = data.image_url,
+        _audio_url   = data.audio_url,
+    }
+
+    return card
+end
+
 -- ── Public API ────────────────────────────────────────────────────────────
 
 -- Generate a flashcard. Returns (card_table, nil) or (nil, error_string).
 -- card_table fields: phrase, ipa, definition, synonyms, text
 -- source/book_title/book_author are added by main.lua.
 function CardGenerator.generate(config, phrase, context, title, author)
+    -- AnkiVocab gateway: delegate entire generation to the server.
+    local provider = config.text_provider or "dashscope"
+    if provider == "ankivocab" then
+        return generate_ankivocab(config, phrase, context, title, author)
+    end
+
     -- Use function-form replacement to prevent % in values being treated as
     -- gsub pattern specials (e.g. book text containing "100%").
     local lang = config.target_language or "English"
