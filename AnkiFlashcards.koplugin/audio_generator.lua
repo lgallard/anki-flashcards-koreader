@@ -25,7 +25,7 @@ end
 -- Used when AnkiVocab API generates audio server-side.
 -- Returns mp3_bytes (string) or nil, error_string.
 function AudioGenerator.download_url(url)
-    if not url or url == "" then
+    if not url or type(url) ~= "string" or url == "" then
         return nil, "No audio URL"
     end
     local response = {}

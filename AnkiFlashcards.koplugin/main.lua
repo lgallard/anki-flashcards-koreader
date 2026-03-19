@@ -340,7 +340,8 @@ function AnkiFlashcards:init()
                     card.highlight_pos1 = highlight_pos1
 
                     -- Handle audio URL from AnkiVocab (download MP3 immediately).
-                    if card._audio_url and card._audio_url ~= "" then
+                    -- Guard with type check: JSON null decodes to json.null (a function).
+                    if type(card._audio_url) == "string" and card._audio_url ~= "" then
                         local audio_bytes, audio_err = AudioGenerator.download_url(card._audio_url)
                         if audio_bytes then
                             card._audio_bytes = audio_bytes
@@ -531,7 +532,7 @@ function AnkiFlashcards:init()
                     -- When ankivocab returns an image URL, pass it to the image
                     -- generator via a temporary config key.
                     local img_config = CONFIGURATION
-                    if card._image_url and card._image_url ~= "" then
+                    if type(card._image_url) == "string" and card._image_url ~= "" then
                         img_config = {}
                         for k, v in pairs(CONFIGURATION) do img_config[k] = v end
                         img_config.image_provider = "ankivocab"

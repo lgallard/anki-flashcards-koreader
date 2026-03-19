@@ -595,7 +595,7 @@ local function ankivocab_generate(config, image_prompt, phrase, on_success, on_e
     -- The image URL is passed via config._ankivocab_image_url, set by main.lua
     -- from the API response's image_url field.
     local image_url = config._ankivocab_image_url
-    if not image_url or image_url == "" then
+    if type(image_url) ~= "string" or image_url == "" then
         if on_error then on_error("No image URL from AnkiVocab API") end
         return
     end
