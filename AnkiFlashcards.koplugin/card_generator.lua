@@ -133,7 +133,7 @@ Return ONLY a valid JSON object, no other text:
   "phrase": "<canonical form of EXACTLY the highlighted text, all lowercase: (1) use infinitive/base form — e.g. 'cranked up' → 'crank up'; (2) replace specific pronouns with generic equivalents as appropriate; NEVER substitute a different phrase from the context>",
   "ipa": "<pronunciation notation for the canonical phrase — use IPA for European languages, pinyin for Mandarin, romaji for Japanese, or the standard phonetic notation for {language}>",
   "definition": "<context-aware definition using simple everyday {language} words, max 20 words; the definition itself must NOT contain difficult or rare vocabulary>",
-  "synonyms": "<3-4 common, high-frequency synonyms in {language} for the canonical phrase, comma-separated; avoid rare or literary words>",
+  "synonyms": "<up to 3 common, high-frequency synonyms in {language} for the canonical phrase, comma-separated; avoid rare or literary words>",
   "text": "<example sentence in {language} at intermediate level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
@@ -213,8 +213,9 @@ local function generate_ankivocab(config, phrase, context, title, author)
     })
 
     local response_body = {}
-    https.TIMEOUT = 30
-    local _, code = https.request {
+    local requester = endpoint:find("^https") and https or http
+    requester.TIMEOUT = 60
+    local _, code = requester.request {
         url     = endpoint,
         method  = "POST",
         headers = {
