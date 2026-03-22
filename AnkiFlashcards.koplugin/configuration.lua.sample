@@ -19,7 +19,7 @@ local CONFIGURATION = {
     -- Browse models at: https://openrouter.ai/models
     openrouter_api_key = "YOUR_OPENROUTER_API_KEY",
     openrouter_model       = "anthropic/claude-3-haiku",  -- cost-effective default
-    openrouter_image_model = "google/gemini-2.5-flash-image-preview",  -- image generation model
+    openrouter_image_model = "google/gemini-3.1-flash-image-preview",  -- image generation model
 
     -- ── Target language ────────────────────────────────────────────────────
     -- Language for flashcard generation (definitions, pronunciation, cloze).

@@ -679,7 +679,7 @@ local function openrouter_image_generate(config, image_prompt, phrase, on_succes
         "professional quality. No text, words, letters or numbers anywhere."
 
     local body = json.encode({
-        model      = config.openrouter_image_model or "google/gemini-2.5-flash-image-preview",
+        model      = config.openrouter_image_model or "google/gemini-3.1-flash-image-preview",
         messages   = {{ role = "user", content = prompt }},
         modalities = { "image" },
         image_config = {
