@@ -211,7 +211,7 @@ function SettingsViewer.show(base_config, on_saved)
         local sub_dlg
 
         local TEXT_PROVIDERS  = { "dashscope", "gemini", "openai", "openrouter", "ankivocab" }
-        local IMAGE_PROVIDERS = { "dashscope", "gemini", "openai", "pollinations", "ankivocab" }
+        local IMAGE_PROVIDERS = { "dashscope", "gemini", "openai", "openrouter", "pollinations", "ankivocab" }
 
         local function cycle(key, options)
             local cur = cfg[key] or options[1]
