@@ -55,15 +55,46 @@ local function download_image(url, save_path)
     return true
 end
 
--- Resize a PNG file in-place using KOReader's own image rendering stack.
--- Falls back silently (keeps original) if RenderImage is unavailable.
+-- Resize a PNG file in-place using crop-to-fill so the image covers the
+-- full target area with no black bars.  Falls back silently if RenderImage
+-- is unavailable.
 local function resize_image(path, target_w, target_h)
     local ok, RenderImage = pcall(require, "ui/renderimage")
     if not ok then return end
-    local bb = RenderImage:renderImageFile(path, false, target_w, target_h)
+    local ok2, BlitBuffer = pcall(require, "ffi/blitbuffer")
+    if not ok2 then return end
+
+    -- Load at native resolution to get original dimensions.
+    local orig = RenderImage:renderImageFile(path, false)
+    if not orig then return end
+    local orig_w, orig_h = orig:getWidth(), orig:getHeight()
+    orig:free()
+    if orig_w == 0 or orig_h == 0 then return end
+
+    -- Scale so the image *covers* the target (crop-to-fill).
+    local scale = math.max(target_w / orig_w, target_h / orig_h)
+    local scaled_w = math.ceil(orig_w * scale)
+    local scaled_h = math.ceil(orig_h * scale)
+
+    local bb = RenderImage:renderImageFile(path, false, scaled_w, scaled_h)
     if not bb then return end
-    pcall(bb.writePNG, bb, path)
+
+    local bw, bh = bb:getWidth(), bb:getHeight()
+    if bw == target_w and bh == target_h then
+        pcall(bb.writePNG, bb, path)
+        bb:free()
+        return
+    end
+
+    -- Crop the center region to exact target dimensions.
+    local crop = BlitBuffer.new(target_w, target_h, bb:getType())
+    local ox = math.max(0, math.floor((bw - target_w) / 2))
+    local oy = math.max(0, math.floor((bh - target_h) / 2))
+    crop:blitFrom(bb, 0, 0, ox, oy, target_w, target_h)
     bb:free()
+
+    pcall(crop.writePNG, crop, path)
+    crop:free()
 end
 
 -- ── DashScope provider ──────────────────────────────────────────────────────
@@ -418,7 +449,7 @@ local function gemini_generate(config, image_prompt, phrase, on_success, on_erro
         f:write(image_bytes)
         f:close()
 
-        -- Gemini already generates at the requested aspect ratio; no resize needed.
+        resize_image(save_path, 768, 432)
         if on_success then on_success(save_path) end
     end
 
@@ -563,6 +594,7 @@ local function openai_generate(config, image_prompt, phrase, on_success, on_erro
                     local size = img:seek("end")
                     img:close()
                     if size and size > 100 then
+                        resize_image(save_path, 768, 432)
                         if on_success then on_success(save_path) end
                         return
                     end
@@ -726,6 +758,7 @@ local function openrouter_image_generate(config, image_prompt, phrase, on_succes
                     local size = img:seek("end")
                     img:close()
                     if size and size > 100 then
+                        resize_image(save_path, 768, 432)
                         if on_success then on_success(save_path) end
                         return
                     end
