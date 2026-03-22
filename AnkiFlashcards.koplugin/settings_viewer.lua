@@ -50,8 +50,7 @@ function SettingsViewer.show(base_config, on_saved)
 
     local function mask_key(k)
         if not k or k == "" or k:find("^YOUR_") then return "(not set)" end
-        if #k <= 8 then return string.rep("*", #k) end
-        return string.rep("*", #k - 4) .. k:sub(-4)
+        return "\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2" .. k:sub(-1)
     end
 
     local function save()

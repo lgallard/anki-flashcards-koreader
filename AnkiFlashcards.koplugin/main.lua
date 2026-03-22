@@ -49,7 +49,7 @@ do
             "ankivocab_url",
             "ankivocab_api_key",
         }) do
-            if saved_anki[key] then
+            if saved_anki[key] and saved_anki[key] ~= "" then
                 CONFIGURATION[key] = saved_anki[key]
             end
         end
