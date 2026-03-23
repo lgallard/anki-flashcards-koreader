@@ -258,6 +258,7 @@ function CardViewer:init()
                 height       = max_h,
                 scale_factor = 0,
             }
+            img:getSize()  -- trigger lazy rendering so _bb is available
             img_h = max_h
         end
         -- Overlay phrase text on the image buffer (back side).
