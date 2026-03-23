@@ -98,7 +98,7 @@ function CardViewer:init()
     }
     local margin = Screen:scaleBySize(30)
     self.width  = math.min(Screen:getWidth(), Screen:getHeight()) - margin
-    self.height = Screen:getHeight() - margin
+    self.height = math.floor(Screen:getHeight() * 0.85)
 
     if Device:hasKeys() then
         self.key_events.Close = { { Device.input.group.Back } }
@@ -312,16 +312,17 @@ function CardViewer:init()
     -- Available height for all content widgets (inside the frame's padding/margin).
     local avail_h = total_content_h - 2 * self.text_padding - 2 * self.text_margin
 
+    local big_gap = gap * 3  -- visible separator before cloze sentence
+
     if not self.show_back then
         -- ── FRONT ─────────────────────────────────────────────────────────────
-        -- Layout (top→bottom): Definition · Synonyms (orange) · Image · Cloze (blanked)
+        -- Layout: Definition · Synonyms · Image · (big gap) · Cloze
         local c          = self.card or {}
         local face       = Font:getFace("smallinfofont")
         local img_widget, image_h = make_image_widget(c.image_path)
-        local n_gaps     = img_widget and 3 or 2
-        local text_h     = avail_h - image_h - n_gaps * gap
+        local text_h     = avail_h - image_h - big_gap - gap * 2
         local def_h      = math.max(1, math.floor(text_h * 0.30))
-        local syn_h      = math.max(1, math.floor(text_h * 0.20))
+        local syn_h      = math.max(1, math.floor(text_h * 0.08))
         local cloze_h    = math.max(1, text_h - def_h - syn_h)
 
         local def_w   = make_text(c.definition or "",              face, def_h,   nil,          "left")
@@ -329,34 +330,32 @@ function CardViewer:init()
         local cloze_w = make_text(blank_cloze(c.text or ""),      face, cloze_h)
         self.scroll_text_w = cloze_w
 
-        local items = { def_w, VerticalSpan:new{height=gap}, syn_w }
+        local items = { def_w, VerticalSpan:new{width=gap*2}, syn_w }
         if img_widget then
-            table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
         end
-        table.insert(items, VerticalSpan:new{height=gap})
+        table.insert(items, VerticalSpan:new{width=big_gap})
         table.insert(items, cloze_w)
         content_widget = VerticalGroup:new(items)
 
     else
         -- ── BACK ──────────────────────────────────────────────────────────────
-        -- With image:  Definition · Synonyms (orange) · Image (phrase overlaid) · IPA (red) · Cloze
-        -- No image:    Definition · Synonyms (orange) · Phrase (blue) · IPA (red) · Cloze
+        -- With image:  Definition · Synonyms · Image (phrase overlaid) · IPA · (big gap) · Cloze
+        -- No image:    Definition · Synonyms · Phrase (blue) · IPA · (big gap) · Cloze
         local c          = self.card or {}
         local face       = Font:getFace("smallinfofont")
         local img_widget, image_h = make_image_widget(c.image_path, c.phrase)
         local has_image  = img_widget ~= nil
-        local n_gaps     = has_image and 4 or 4
-        local text_h     = avail_h - image_h - n_gaps * gap
+        local text_h     = avail_h - image_h - big_gap - gap * 2
         local def_h      = math.max(1, math.floor(text_h * 0.30))
-        local syn_h      = math.max(1, math.floor(text_h * 0.20))
+        local syn_h      = math.max(1, math.floor(text_h * 0.08))
         local phrase_h, ipa_h, cloze_h
         if has_image then
-            ipa_h   = math.max(1, math.floor(text_h * 0.10))
+            ipa_h   = math.max(1, math.floor(text_h * 0.08))
             cloze_h = math.max(1, text_h - def_h - syn_h - ipa_h)
         else
             phrase_h = math.max(1, math.floor(text_h * 0.12))
-            ipa_h    = math.max(1, math.floor(text_h * 0.10))
+            ipa_h    = math.max(1, math.floor(text_h * 0.08))
             cloze_h  = math.max(1, text_h - def_h - syn_h - phrase_h - ipa_h)
         end
 
@@ -366,18 +365,16 @@ function CardViewer:init()
         local cloze_w = make_text(reveal_cloze(c.text or ""),     face, cloze_h)
         self.scroll_text_w = cloze_w
 
-        local items = { def_w, VerticalSpan:new{height=gap}, syn_w }
+        local items = { def_w, VerticalSpan:new{width=gap*2}, syn_w }
         if has_image then
-            table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
         else
             local phrase_w = make_text(ptf_bold(c.phrase or ""), face, phrase_h, COLOR_BLUE)
-            table.insert(items, VerticalSpan:new{height=gap})
+            table.insert(items, VerticalSpan:new{width=gap})
             table.insert(items, phrase_w)
         end
-        table.insert(items, VerticalSpan:new{height=gap})
         table.insert(items, ipa_w)
-        table.insert(items, VerticalSpan:new{height=gap})
+        table.insert(items, VerticalSpan:new{width=big_gap})
         table.insert(items, cloze_w)
         content_widget = VerticalGroup:new(items)
     end
