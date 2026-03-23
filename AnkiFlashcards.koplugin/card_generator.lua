@@ -134,7 +134,7 @@ Return ONLY a valid JSON object, no other text:
   "ipa": "<pronunciation notation for the canonical phrase — use IPA for European languages, pinyin for Mandarin, romaji for Japanese, or the standard phonetic notation for {language}>",
   "definition": "<context-aware definition using simple everyday {language} words, max 20 words; the definition itself must NOT contain difficult or rare vocabulary>",
   "synonyms": "<up to 3 common, high-frequency synonyms in {language} for the canonical phrase, comma-separated; avoid rare or literary words>",
-  "text": "<example sentence in {language} at intermediate level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
+  "text": "<SHORT example sentence in {language} (max 15 words) at intermediate level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
@@ -144,7 +144,7 @@ Phrase: "{phrase}"
 
 Return ONLY a valid JSON object, no other text:
 {
-  "text": "<example sentence in {language} at intermediate level: use simple grammar and everyday vocabulary — the phrase must be the ONLY challenging word; create a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
+  "text": "<SHORT example sentence in {language} (max 15 words) at intermediate level: use simple grammar and everyday vocabulary — the phrase must be the ONLY challenging word; create a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
   "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
 }]]
 
