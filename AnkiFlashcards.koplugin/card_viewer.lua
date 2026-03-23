@@ -96,9 +96,9 @@ function CardViewer:init()
         w = Screen:getWidth(),
         h = Screen:getHeight(),
     }
-    local std_w = math.min(Screen:getWidth(), Screen:getHeight()) - Screen:scaleBySize(30)
-    self.width  = std_w
-    self.height = std_w
+    local margin = Screen:scaleBySize(30)
+    self.width  = math.min(Screen:getWidth(), Screen:getHeight()) - margin
+    self.height = Screen:getHeight() - margin
 
     if Device:hasKeys() then
         self.key_events.Close = { { Device.input.group.Back } }
