@@ -340,31 +340,33 @@ function CardViewer:init()
 
     else
         -- ── BACK ──────────────────────────────────────────────────────────────
-        -- With image:  Definition · Image (phrase overlaid) · IPA (red) · Cloze
-        -- No image:    Definition · Phrase (blue) · IPA (red) · Cloze
+        -- With image:  Definition · Synonyms (orange) · Image (phrase overlaid) · IPA (red) · Cloze
+        -- No image:    Definition · Synonyms (orange) · Phrase (blue) · IPA (red) · Cloze
         local c          = self.card or {}
         local face       = Font:getFace("smallinfofont")
         local img_widget, image_h = make_image_widget(c.image_path, c.phrase)
         local has_image  = img_widget ~= nil
-        local n_gaps     = 3
+        local n_gaps     = has_image and 4 or 4
         local text_h     = avail_h - image_h - n_gaps * gap
         local def_h      = math.max(1, math.floor(text_h * 0.30))
+        local syn_h      = math.max(1, math.floor(text_h * 0.20))
         local phrase_h, ipa_h, cloze_h
         if has_image then
-            ipa_h   = math.max(1, math.floor(text_h * 0.12))
-            cloze_h = math.max(1, text_h - def_h - ipa_h)
+            ipa_h   = math.max(1, math.floor(text_h * 0.10))
+            cloze_h = math.max(1, text_h - def_h - syn_h - ipa_h)
         else
             phrase_h = math.max(1, math.floor(text_h * 0.12))
             ipa_h    = math.max(1, math.floor(text_h * 0.10))
-            cloze_h  = math.max(1, text_h - def_h - phrase_h - ipa_h)
+            cloze_h  = math.max(1, text_h - def_h - syn_h - phrase_h - ipa_h)
         end
 
-        local def_w   = make_text(c.definition or "",         face, def_h,   nil, "left")
-        local ipa_w   = make_text(ptf_bold(c.ipa or ""),      face, ipa_h,   COLOR_RED)
-        local cloze_w = make_text(reveal_cloze(c.text or ""), face, cloze_h)
+        local def_w   = make_text(c.definition or "",              face, def_h,   nil, "left")
+        local syn_w   = make_text(ptf_bold(c.synonyms or ""),     face, syn_h,   COLOR_ORANGE)
+        local ipa_w   = make_text(ptf_bold(c.ipa or ""),           face, ipa_h,   COLOR_RED)
+        local cloze_w = make_text(reveal_cloze(c.text or ""),     face, cloze_h)
         self.scroll_text_w = cloze_w
 
-        local items = { def_w }
+        local items = { def_w, VerticalSpan:new{height=gap}, syn_w }
         if has_image then
             table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
