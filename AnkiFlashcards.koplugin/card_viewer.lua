@@ -27,6 +27,7 @@ local UIManager        = require("ui/uimanager")
 local HorizontalGroup  = require("ui/widget/horizontalgroup")
 local VerticalGroup    = require("ui/widget/verticalgroup")
 local VerticalSpan     = require("ui/widget/verticalspan")
+local RenderText       = require("ui/rendertext")
 local WidgetContainer  = require("ui/widget/container/widgetcontainer")
 local _                = require("gettext")
 
@@ -235,8 +236,10 @@ function CardViewer:init()
     local content_widget
 
     -- Build a scaled ImageWidget (scale to width, max 40% of content height).
-    -- Tapping the image opens a full-screen zoomable viewer.
-    local function make_image_widget(image_path)
+    -- Tapping the image opens a full-screen zoomable viewer (original, no overlay).
+    -- When phrase_overlay is provided, renders uppercase white-on-black outlined
+    -- text at the bottom of the image (back side only).
+    local function make_image_widget(image_path, phrase_overlay)
         if not image_path or image_path == "" then return nil, 0 end
         local max_h = math.floor(total_content_h * 0.40)
         -- Scale to full width; let ImageWidget compute the natural height.
@@ -256,6 +259,32 @@ function CardViewer:init()
                 scale_factor = 0,
             }
             img_h = max_h
+        end
+        -- Overlay phrase text on the image buffer (back side).
+        if phrase_overlay and phrase_overlay ~= "" and img._bb then
+            local bb = img._bb
+            local bw, bh = bb:getWidth(), bb:getHeight()
+            local text = phrase_overlay:upper()
+            local font_size = math.max(16, math.floor(bh * 0.10))
+            local face = Font:getFace("cfont", font_size)
+            -- Shrink font if text is wider than the image (with margin).
+            local tsize = RenderText:sizeUtf8Text(0, bw, face, text, true, true)
+            while tsize and tsize.x > bw - 20 and font_size > 16 do
+                font_size = font_size - 2
+                face = Font:getFace("cfont", font_size)
+                tsize = RenderText:sizeUtf8Text(0, bw, face, text, true, true)
+            end
+            if tsize and tsize.x > 0 then
+                local tx = math.max(0, math.floor((bw - tsize.x) / 2))
+                local ty = bh - math.floor(bh * 0.06)
+                -- Black outline at 8 offsets for readability on any background.
+                local d = math.max(1, math.floor(font_size / 16))
+                for _, off in ipairs({{-d,0},{d,0},{0,-d},{0,d},{-d,-d},{d,-d},{-d,d},{d,d}}) do
+                    RenderText:renderUtf8Text(bb, tx+off[1], ty+off[2], face, text, true, true, Blitbuffer.COLOR_BLACK)
+                end
+                -- White text on top.
+                RenderText:renderUtf8Text(bb, tx, ty, face, text, true, true, Blitbuffer.COLOR_WHITE)
+            end
         end
         self._tap_image_widget = img
         self._tap_image_path   = image_path
@@ -310,30 +339,39 @@ function CardViewer:init()
 
     else
         -- ── BACK ──────────────────────────────────────────────────────────────
-        -- Layout (top→bottom): Definition · Image · Phrase (blue) · IPA (red) · Cloze
+        -- With image:  Definition · Image (phrase overlaid) · IPA (red) · Cloze
+        -- No image:    Definition · Phrase (blue) · IPA (red) · Cloze
         local c          = self.card or {}
         local face       = Font:getFace("smallinfofont")
-        local img_widget, image_h = make_image_widget(c.image_path)
-        local n_gaps     = img_widget and 4 or 3
+        local img_widget, image_h = make_image_widget(c.image_path, c.phrase)
+        local has_image  = img_widget ~= nil
+        local n_gaps     = 3
         local text_h     = avail_h - image_h - n_gaps * gap
         local def_h      = math.max(1, math.floor(text_h * 0.30))
-        local phrase_h   = math.max(1, math.floor(text_h * 0.12))
-        local ipa_h      = math.max(1, math.floor(text_h * 0.10))
-        local cloze_h    = math.max(1, text_h - def_h - phrase_h - ipa_h)
+        local phrase_h, ipa_h, cloze_h
+        if has_image then
+            ipa_h   = math.max(1, math.floor(text_h * 0.12))
+            cloze_h = math.max(1, text_h - def_h - ipa_h)
+        else
+            phrase_h = math.max(1, math.floor(text_h * 0.12))
+            ipa_h    = math.max(1, math.floor(text_h * 0.10))
+            cloze_h  = math.max(1, text_h - def_h - phrase_h - ipa_h)
+        end
 
-        local def_w    = make_text(c.definition or "",          face, def_h,    nil,        "left")
-        local phrase_w = make_text(ptf_bold(c.phrase or ""),    face, phrase_h, COLOR_BLUE)
-        local ipa_w    = make_text(ptf_bold(c.ipa or ""),       face, ipa_h,    COLOR_RED)
-        local cloze_w  = make_text(reveal_cloze(c.text or ""), face, cloze_h)
+        local def_w   = make_text(c.definition or "",         face, def_h,   nil, "left")
+        local ipa_w   = make_text(ptf_bold(c.ipa or ""),      face, ipa_h,   COLOR_RED)
+        local cloze_w = make_text(reveal_cloze(c.text or ""), face, cloze_h)
         self.scroll_text_w = cloze_w
 
         local items = { def_w }
-        if img_widget then
+        if has_image then
             table.insert(items, VerticalSpan:new{height=gap})
             table.insert(items, img_widget)
+        else
+            local phrase_w = make_text(ptf_bold(c.phrase or ""), face, phrase_h, COLOR_BLUE)
+            table.insert(items, VerticalSpan:new{height=gap})
+            table.insert(items, phrase_w)
         end
-        table.insert(items, VerticalSpan:new{height=gap})
-        table.insert(items, phrase_w)
         table.insert(items, VerticalSpan:new{height=gap})
         table.insert(items, ipa_w)
         table.insert(items, VerticalSpan:new{height=gap})
