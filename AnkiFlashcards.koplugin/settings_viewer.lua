@@ -14,16 +14,17 @@ local CardSync       = require("card_sync")
 local SettingsViewer = {}
 
 function SettingsViewer.show(base_config, on_saved)
-    -- Extract the anki subtable from the full config.
-    local anki_base = base_config
-    if base_config and type(base_config.anki) == "table" then
-        anki_base = base_config.anki
-    end
-
-    -- Work on a merged copy so saved JSON values take priority.
+    -- Work on a merged copy: start with top-level config keys (API keys,
+    -- provider settings), then overlay the anki subtable, then saved
+    -- on-device settings on top so they take priority.
     local cfg = {}
-    if anki_base then
-        for k, v in pairs(anki_base) do cfg[k] = v end
+    if base_config then
+        for k, v in pairs(base_config) do
+            if k ~= "anki" then cfg[k] = v end
+        end
+        if type(base_config.anki) == "table" then
+            for k, v in pairs(base_config.anki) do cfg[k] = v end
+        end
     end
     local saved = CardStorage.load_anki_settings()
     if saved then
@@ -50,8 +51,7 @@ function SettingsViewer.show(base_config, on_saved)
 
     local function mask_key(k)
         if not k or k == "" or k:find("^YOUR_") then return "(not set)" end
-        if #k <= 8 then return string.rep("*", #k) end
-        return string.rep("*", #k - 4) .. k:sub(-4)
+        return "\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2" .. k:sub(-1)
     end
 
     local function save()
