@@ -48,11 +48,11 @@ local CONFIGURATION = {
     -- ── Anki integration ────────────────────────────────────────────────────
     -- Requires AnkiConnect add-on running on the same network as your Kobo.
     -- Use the LAN IP of the device running Anki — not "localhost".
-    -- Note type MUST be "English" (see anki/README.md).
+    -- Note type: "Vocabulary" (see anki/README.md). Existing "English" types also work.
     anki = {
         url   = "http://YOUR_HOST_IP:8765",  -- ← LAN IP of the device running Anki
         deck  = "English::Koreader",
-        model = "English",
+        model = "Vocabulary",
         tags  = { "KOReader" },
     },
 }

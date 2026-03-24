@@ -139,8 +139,12 @@ function SettingsViewer.show(base_config, on_saved)
         local buttons = {}
 
         table.insert(buttons, {{
-            text     = _("Note type: English (fixed)"),
-            callback = function() end,
+            text     = _("Note type: ") .. (cfg.model or "Vocabulary"),
+            callback = function()
+                UIManager:close(sub_dlg)
+                edit_field("Note Type", "model", "Vocabulary",
+                          show_anki_connection)
+            end,
         }})
 
         local ANKI_FIELDS = {
