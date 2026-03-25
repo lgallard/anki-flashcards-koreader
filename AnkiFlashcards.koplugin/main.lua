@@ -119,6 +119,29 @@ local function get_anki_config()
     return cfg
 end
 
+-- Build an image-generator config for a card.  When the image provider is
+-- "ankivocab", copies CONFIGURATION and adds the keys the generator needs
+-- to poll the API for the image URL.
+local function make_image_config(card)
+    local cfg = CONFIGURATION
+    if CONFIGURATION.image_provider == "ankivocab" then
+        cfg = {}
+        for k, v in pairs(CONFIGURATION) do cfg[k] = v end
+        cfg.image_provider = "ankivocab"
+        if type(card._image_url) == "string" and card._image_url ~= "" then
+            cfg._ankivocab_image_url = card._image_url
+        end
+        cfg._ankivocab_word = card.phrase
+    end
+    return cfg
+end
+
+-- Return true if the card has enough info to kick off image generation.
+local function can_generate_image(card, img_cfg)
+    return (card.image_prompt and card.image_prompt ~= "")
+        or (img_cfg.image_provider == "ankivocab")
+end
+
 -- ── Quick Lookup cache + popup (purple highlights) ──────────────────────────
 local quick_lookup_cache = {}
 
@@ -522,20 +545,9 @@ function AnkiFlashcards:init()
                     viewer_ref[1] = initial_viewer
 
                     -- Start image generation in background.
-                    -- When ankivocab is the image provider, pass the image URL
-                    -- (if available) and the word so the generator can poll if needed.
-                    local img_config = CONFIGURATION
-                    if CONFIGURATION.image_provider == "ankivocab" then
-                        img_config = {}
-                        for k, v in pairs(CONFIGURATION) do img_config[k] = v end
-                        img_config.image_provider = "ankivocab"
-                        if type(card._image_url) == "string" and card._image_url ~= "" then
-                            img_config._ankivocab_image_url = card._image_url
-                        end
-                        img_config._ankivocab_word = card.phrase
-                        card._image_url = nil
-                    end
-                    if card.image_prompt or img_config.image_provider == "ankivocab" then
+                    local img_config = make_image_config(card)
+                    card._image_url = nil
+                    if can_generate_image(card, img_config) then
                         ImageGenerator.generate_async(
                             img_config,
                             card.image_prompt,
@@ -689,11 +701,12 @@ function AnkiFlashcards:init()
                         end
                         viewer_ref[1] = make_viewer(false)
                         -- Auto-regenerate image if missing (e.g. synced card).
+                        local saved_img_cfg = make_image_config(card)
                         if (not card.image_path or card.image_path == "")
-                           and card.image_prompt and card.image_prompt ~= ""
+                           and can_generate_image(card, saved_img_cfg)
                            and NetworkMgr:isOnline() then
                             ImageGenerator.generate_async(
-                                CONFIGURATION,
+                                saved_img_cfg,
                                 card.image_prompt,
                                 card.phrase,
                                 function(img_path)

@@ -391,11 +391,20 @@ function CardManager.show(base_config, filter_book, ui)
             end
             viewer_ref[1] = make_viewer(false)
             -- Auto-regenerate image if missing (e.g. synced card).
+            -- For ankivocab, poll the API even without a local image_prompt.
+            local img_cfg = config
+            if config.image_provider == "ankivocab" then
+                img_cfg = {}
+                for k, v in pairs(config) do img_cfg[k] = v end
+                img_cfg._ankivocab_word = card.phrase
+            end
+            local has_image_source = (card.image_prompt and card.image_prompt ~= "")
+                                  or (img_cfg.image_provider == "ankivocab")
             if (not card.image_path or card.image_path == "")
-               and card.image_prompt and card.image_prompt ~= ""
+               and has_image_source
                and NetworkMgr:isOnline() then
                 ImageGenerator.generate_async(
-                    config,
+                    img_cfg,
                     card.image_prompt,
                     card.phrase,
                     function(img_path)
