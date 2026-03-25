@@ -91,6 +91,7 @@ function CardStorage.save_card(card)
         book_author = card.book_author or "",
         image_path     = card.image_path    or "",
         image_prompt   = card.image_prompt  or "",
+        _audio_url     = card._audio_url   or "",
         highlight_pos0 = card.highlight_pos0,
         highlight_pos1 = card.highlight_pos1,
         date           = os.date("%Y-%m-%d"),

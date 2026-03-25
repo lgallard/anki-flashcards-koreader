@@ -339,9 +339,8 @@ function AnkiFlashcards:init()
                     card.highlight_pos0 = highlight_pos0
                     card.highlight_pos1 = highlight_pos1
 
-                    -- AnkiVocab audio is generated server-side and available
-                    -- in the .apkg export — no need to download to the Kobo.
-                    card._audio_url = nil
+                    -- Keep _audio_url so AnkiConnect can download and attach
+                    -- the server-generated audio when sending to Anki.
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
                     local viewer_ref = {}
@@ -523,17 +522,20 @@ function AnkiFlashcards:init()
                     viewer_ref[1] = initial_viewer
 
                     -- Start image generation in background.
-                    -- When ankivocab returns an image URL, pass it to the image
-                    -- generator via a temporary config key.
+                    -- When ankivocab is the image provider, pass the image URL
+                    -- (if available) and the word so the generator can poll if needed.
                     local img_config = CONFIGURATION
-                    if type(card._image_url) == "string" and card._image_url ~= "" then
+                    if CONFIGURATION.image_provider == "ankivocab" then
                         img_config = {}
                         for k, v in pairs(CONFIGURATION) do img_config[k] = v end
                         img_config.image_provider = "ankivocab"
-                        img_config._ankivocab_image_url = card._image_url
+                        if type(card._image_url) == "string" and card._image_url ~= "" then
+                            img_config._ankivocab_image_url = card._image_url
+                        end
+                        img_config._ankivocab_word = card.phrase
                         card._image_url = nil
                     end
-                    if card.image_prompt or (img_config._ankivocab_image_url) then
+                    if card.image_prompt or img_config.image_provider == "ankivocab" then
                         ImageGenerator.generate_async(
                             img_config,
                             card.image_prompt,
