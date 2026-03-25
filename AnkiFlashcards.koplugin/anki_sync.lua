@@ -89,7 +89,7 @@ local function get_first_field(url, model)
         return first_field_cache[model]
     end
     local result = post(url, "modelFieldNames", { modelName = model })
-    if result and result.result and result.result[1] then
+    if result and type(result.result) == "table" and result.result[1] then
         first_field_cache[model] = result.result[1]
         return result.result[1]
     end
@@ -113,7 +113,7 @@ function AnkiSync.send_card(config, card, tts_config)
         return nil, "Anki URL not configured"
     end
 
-    local model = config.model or "English"
+    local model = config.model or "Vocabulary"
 
     local fields = {
         ["Phrase"]     = card.phrase     or "",

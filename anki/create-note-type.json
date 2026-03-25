@@ -2,7 +2,7 @@
   "action": "createModel",
   "version": 6,
   "params": {
-    "modelName": "English",
+    "modelName": "Vocabulary",
     "inOrderFields": [
       "Phrase",
       "IPA",
@@ -11,7 +11,8 @@
       "Text",
       "Source",
       "ImageFront",
-      "ImageBack"
+      "ImageBack",
+      "Sound"
     ],
     "css": "
 .card {
@@ -84,6 +85,7 @@
 <div class=\"phrase\">{{Phrase}}</div>
 <div class=\"ipa\">{{IPA}}</div>
 <div class=\"cloze\">{{cloze:Text}}</div>
+{{Sound}}
 <div class=\"source\"><a href=\"{{Source}}\">{{Source}}</a></div>
 "
       }

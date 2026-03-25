@@ -838,12 +838,13 @@ function ImageGenerator.generate_async(config, image_prompt, phrase, on_success,
         end
     end
 
-    if not image_prompt or image_prompt == "" then
+    local provider_name = config and config.image_provider or "dashscope"
+
+    -- AnkiVocab provides a direct image URL, no prompt needed.
+    if provider_name ~= "ankivocab" and (not image_prompt or image_prompt == "") then
         on_error("No image prompt")
         return
     end
-
-    local provider_name = config and config.image_provider or "dashscope"
     local provider_fn = PROVIDERS[provider_name]
     if not provider_fn then
         on_error("Unknown image provider: " .. tostring(provider_name))

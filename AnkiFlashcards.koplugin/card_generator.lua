@@ -202,7 +202,9 @@ local function generate_ankivocab(config, phrase, context, title, author)
     local target_lang = lang_codes[lang:lower()] or "en"
 
     local include_image = config.image_provider == "ankivocab"
-    local include_audio = config.tts_enabled or false
+    -- Always request audio from AnkiVocab so it's available in the .apkg
+    -- export, even though the Kobo won't download the MP3 locally.
+    local include_audio = true
 
     local body = json.encode({
         word          = phrase,
