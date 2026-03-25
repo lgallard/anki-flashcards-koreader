@@ -89,7 +89,7 @@ local function get_first_field(url, model)
         return first_field_cache[model]
     end
     local result = post(url, "modelFieldNames", { modelName = model })
-    if result and result.result and result.result[1] then
+    if result and type(result.result) == "table" and result.result[1] then
         first_field_cache[model] = result.result[1]
         return result.result[1]
     end

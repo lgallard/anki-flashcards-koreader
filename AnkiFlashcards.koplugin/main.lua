@@ -339,15 +339,9 @@ function AnkiFlashcards:init()
                     card.highlight_pos0 = highlight_pos0
                     card.highlight_pos1 = highlight_pos1
 
-                    -- Handle audio URL from AnkiVocab (download MP3 immediately).
-                    -- Guard with type check: JSON null decodes to json.null (a function).
-                    if type(card._audio_url) == "string" and card._audio_url ~= "" then
-                        local audio_bytes, audio_err = AudioGenerator.download_url(card._audio_url)
-                        if audio_bytes then
-                            card._audio_bytes = audio_bytes
-                        end
-                        card._audio_url = nil
-                    end
+                    -- AnkiVocab audio is generated server-side and available
+                    -- in the .apkg export — no need to download to the Kobo.
+                    card._audio_url = nil
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
                     local viewer_ref = {}
