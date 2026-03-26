@@ -81,21 +81,6 @@ local function store_media_file(url, filename, b64_data)
     return result.result or filename
 end
 
--- Cache first-field name per model for the session.
-local first_field_cache = {}
-
-local function get_first_field(url, model)
-    if first_field_cache[model] then
-        return first_field_cache[model]
-    end
-    local result = post(url, "modelFieldNames", { modelName = model })
-    if result and type(result.result) == "table" and result.result[1] then
-        first_field_cache[model] = result.result[1]
-        return result.result[1]
-    end
-    return nil
-end
-
 -- Check that AnkiConnect is reachable. Returns true or nil + error.
 function AnkiSync.test_connection(url)
     local result, err = post(url, "requestPermission", {})
@@ -123,13 +108,6 @@ function AnkiSync.send_card(config, card, tts_config)
         ["Text"]       = card.text       or "",
         ["Source"]     = card.source     or "",
     }
-
-    -- Anki rejects notes whose first field is empty.
-    -- Auto-detect the first field of the model and fill it with phrase.
-    local first = get_first_field(config.url, model)
-    if first and (not fields[first] or fields[first] == "") then
-        fields[first] = card.phrase or ""
-    end
 
     local note = {
         deckName  = build_deck_name(config, card),
