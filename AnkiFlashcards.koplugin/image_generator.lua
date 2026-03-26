@@ -281,6 +281,9 @@ if d then d:write(c) d:close() end
     return true
 end
 
+local POLLINATIONS_USER_HINT =
+    "Pollinations is unreliable. Consider switching to another image provider in Anki Settings."
+
 local function pollinations_generate(config, image_prompt, phrase, on_success, on_error)
     local UIManager = require("ui/uimanager")
     local save_path = make_save_path(phrase)
@@ -313,7 +316,7 @@ local function pollinations_generate(config, image_prompt, phrase, on_success, o
     ))
 
     local attempts = 0
-    local max_attempts = 24  -- 24 × 3s = 72s
+    local max_attempts = 10  -- 10 × 3s = 30s (fail fast — service is unreliable)
     local function poll()
         attempts = attempts + 1
 
@@ -336,10 +339,10 @@ local function pollinations_generate(config, image_prompt, phrase, on_success, o
                     end
                 end
                 os.remove(save_path)
-                if on_error then on_error("Pollinations returned empty image") end
+                if on_error then on_error("Pollinations returned empty image. " .. POLLINATIONS_USER_HINT) end
             else
                 os.remove(save_path)
-                if on_error then on_error("Pollinations HTTP " .. (code or "error")) end
+                if on_error then on_error("Pollinations error (HTTP " .. (code or "?") .. "). " .. POLLINATIONS_USER_HINT) end
             end
             return
         end
@@ -347,7 +350,7 @@ local function pollinations_generate(config, image_prompt, phrase, on_success, o
         if attempts >= max_attempts then
             os.remove(done_file)
             os.remove(save_path)
-            if on_error then on_error("Image generation timed out") end
+            if on_error then on_error("Pollinations timed out. " .. POLLINATIONS_USER_HINT) end
             return
         end
 
