@@ -1,10 +1,9 @@
 # AnkiFlashcards KOReader — Backlog
 
-## Reference: Anki "English" Note Type Fields
+## Reference: Anki "Vocabulary" Note Type Fields
 
 | Field       | Description                                      |
 |-------------|--------------------------------------------------|
-| `№`         | Card number (auto-assigned)                      |
 | `Phrase`    | The highlighted word or phrase                   |
 | `IPA`       | American English IPA transcription               |
 | `Definition`| Context-aware definition (≤20 words)             |
