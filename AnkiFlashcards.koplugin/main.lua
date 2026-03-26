@@ -131,7 +131,10 @@ local function make_image_config(card)
         if type(card._image_url) == "string" and card._image_url ~= "" then
             cfg._ankivocab_image_url = card._image_url
         end
-        cfg._ankivocab_word = card.phrase
+        -- Use the original word sent to the API (persisted on card), falling
+        -- back to the canonical phrase.  The API indexes by original word, so
+        -- polling with the canonical form may not find the cached image.
+        cfg._ankivocab_word = card._ankivocab_word or card.phrase
     end
     return cfg
 end

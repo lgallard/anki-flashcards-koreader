@@ -39,12 +39,14 @@ end
 local function download_image(url, save_path)
     ensure_image_dir()
     local requester = url:find("^https") and require("ssl.https") or require("socket.http")
-    requester.TIMEOUT = 30
+    local saved_timeout = requester.TIMEOUT
+    requester.TIMEOUT = 15
     local response = {}
     local ok, code = requester.request {
         url  = url,
         sink = ltn12.sink.table(response),
     }
+    requester.TIMEOUT = saved_timeout
     if tostring(code) ~= "200" then
         return false, "Image download HTTP " .. tostring(code)
     end
@@ -791,6 +793,8 @@ end
 -- Poll the AnkiVocab API to fetch the image URL for a word.
 -- The server generates images asynchronously, so the URL may not be available
 -- in the initial card generation response.  Returns (url, nil) or (nil, err).
+-- IMPORTANT: this runs inside UIManager callbacks, so the HTTP timeout must be
+-- short to avoid freezing the e-ink UI.
 local function ankivocab_poll_image_url(config, word)
     local api_url = config.ankivocab_url
     local api_key = config.ankivocab_api_key
@@ -806,20 +810,28 @@ local function ankivocab_poll_image_url(config, word)
     })
     local response_body = {}
     local requester = endpoint:find("^https") and https or http
-    requester.TIMEOUT = 30
-    local _, code = requester.request {
-        url     = endpoint,
-        method  = "POST",
-        headers = {
-            ["Content-Type"]  = "application/json",
-            ["X-API-Key"]     = api_key,
-            ["Content-Length"] = tostring(#body),
-        },
-        source = ltn12.source.string(body),
-        sink   = ltn12.sink.table(response_body),
-    }
-    if tostring(code) ~= "200" then
-        return nil, "HTTP " .. tostring(code)
+    -- Short timeout — this blocks the UI thread on e-ink devices.
+    local saved_timeout = requester.TIMEOUT
+    requester.TIMEOUT = 10
+    local poll_ok, poll_code = pcall(function()
+        return select(2, requester.request {
+            url     = endpoint,
+            method  = "POST",
+            headers = {
+                ["Content-Type"]  = "application/json",
+                ["X-API-Key"]     = api_key,
+                ["Content-Length"] = tostring(#body),
+            },
+            source = ltn12.source.string(body),
+            sink   = ltn12.sink.table(response_body),
+        })
+    end)
+    requester.TIMEOUT = saved_timeout
+    if not poll_ok then
+        return nil, "request error: " .. tostring(poll_code)
+    end
+    if tostring(poll_code) ~= "200" then
+        return nil, "HTTP " .. tostring(poll_code)
     end
     local ok, data = pcall(json.decode, table.concat(response_body))
     if not ok or not data then return nil, "JSON decode error" end
@@ -830,7 +842,9 @@ local function ankivocab_poll_image_url(config, word)
 end
 
 local function ankivocab_generate(config, image_prompt, phrase, on_success, on_error)
-    local UIManager = require("ui/uimanager")
+    local UIManager    = require("ui/uimanager")
+    local Notification = require("ui/widget/notification")
+    local _            = require("gettext")
     local save_path = make_save_path(phrase)
 
     -- The image URL may be passed directly from the card generation response,
@@ -859,25 +873,42 @@ local function ankivocab_generate(config, image_prompt, phrase, on_success, on_e
     end
 
     -- URL not available yet — poll the AnkiVocab API until the image is ready.
+    UIManager:show(Notification:new {
+        text    = _("Polling AnkiVocab for image: ") .. word,
+        timeout = 10,
+    })
+
     local attempts = 0
-    local max_attempts = 12  -- 12 × 5s = 60s
+    local max_attempts = 6  -- 6 × 10s = 60s
 
     local function poll()
         attempts = attempts + 1
         if attempts > max_attempts then
-            if on_error then on_error("AnkiVocab image not ready after polling") end
+            if on_error then on_error("AnkiVocab image not ready — try Regen Image later") end
             return
         end
-        local url, _err = ankivocab_poll_image_url(config, word)
+        UIManager:show(Notification:new {
+            text    = _("Image poll ") .. attempts .. "/" .. max_attempts .. "…",
+            timeout = 8,
+        })
+        local url, poll_err = ankivocab_poll_image_url(config, word)
         if url then
+            UIManager:show(Notification:new {
+                text    = _("Got image URL, downloading…"),
+                timeout = 5,
+            })
             download_and_finish(url)
         else
-            UIManager:scheduleIn(5, poll)
+            UIManager:show(Notification:new {
+                text    = _("Image not ready: ") .. (poll_err or "unknown"),
+                timeout = 8,
+            })
+            UIManager:scheduleIn(10, poll)
         end
     end
 
-    -- First poll after 5s to give the server time to generate.
-    UIManager:scheduleIn(5, poll)
+    -- First poll after 10s to give the server time to generate.
+    UIManager:scheduleIn(10, poll)
 end
 
 -- ── Provider dispatch ───────────────────────────────────────────────────────
