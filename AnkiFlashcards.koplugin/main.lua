@@ -140,9 +140,13 @@ local function make_image_config(card)
 end
 
 -- Return true if the card has enough info to kick off image generation.
+-- For ankivocab, only trigger if the card was actually created via AnkiVocab
+-- (_ankivocab_word is set), not just because the current provider is ankivocab.
 local function can_generate_image(card, img_cfg)
-    return (card.image_prompt and card.image_prompt ~= "")
-        or (img_cfg.image_provider == "ankivocab")
+    local has_prompt = card.image_prompt and card.image_prompt ~= ""
+    local is_ankivocab_card = img_cfg.image_provider == "ankivocab"
+                          and card._ankivocab_word and card._ankivocab_word ~= ""
+    return has_prompt or is_ankivocab_card
 end
 
 -- ── Quick Lookup cache + popup (purple highlights) ──────────────────────────

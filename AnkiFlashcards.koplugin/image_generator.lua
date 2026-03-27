@@ -873,11 +873,6 @@ local function ankivocab_generate(config, image_prompt, phrase, on_success, on_e
     end
 
     -- URL not available yet — poll the AnkiVocab API until the image is ready.
-    UIManager:show(Notification:new {
-        text    = _("Polling AnkiVocab for image: ") .. word,
-        timeout = 10,
-    })
-
     local attempts = 0
     local max_attempts = 6  -- 6 × 10s = 60s
 
@@ -887,22 +882,10 @@ local function ankivocab_generate(config, image_prompt, phrase, on_success, on_e
             if on_error then on_error("AnkiVocab image not ready — try Regen Image later") end
             return
         end
-        UIManager:show(Notification:new {
-            text    = _("Image poll ") .. attempts .. "/" .. max_attempts .. "…",
-            timeout = 8,
-        })
-        local url, poll_err = ankivocab_poll_image_url(config, word)
+        local url, _err = ankivocab_poll_image_url(config, word)
         if url then
-            UIManager:show(Notification:new {
-                text    = _("Got image URL, downloading…"),
-                timeout = 5,
-            })
             download_and_finish(url)
         else
-            UIManager:show(Notification:new {
-                text    = _("Image not ready: ") .. (poll_err or "unknown"),
-                timeout = 8,
-            })
             UIManager:scheduleIn(10, poll)
         end
     end
