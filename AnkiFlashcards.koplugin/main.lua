@@ -647,7 +647,10 @@ function AnkiFlashcards:init()
                                 show_back = show_back,
                                 read_only = false,
                                 on_show_answer = function()
-                                    UIManager:close(v)
+                                    -- Close whichever viewer is currently showing
+                                    -- (may differ from v after an async image update).
+                                    local cur = viewer_ref[1] or v
+                                    UIManager:close(cur)
                                     viewer_ref[1] = make_viewer(true)
                                 end,
                                 on_save = function()
