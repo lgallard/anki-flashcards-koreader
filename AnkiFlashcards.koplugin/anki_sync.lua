@@ -139,12 +139,20 @@ function AnkiSync.send_card(config, card, tts_config)
         end)
     end
 
-    -- Attach TTS audio. Use pre-downloaded bytes from AnkiVocab if available,
-    -- otherwise generate via ElevenLabs.
+    -- Attach TTS audio.  Priority:
+    --   1. Pre-downloaded bytes (card._audio_bytes)
+    --   2. AnkiVocab server-generated audio (card._audio_url)
+    --   3. ElevenLabs TTS fallback
     local mp3_bytes
     if card._audio_bytes then
         mp3_bytes = card._audio_bytes
-    else
+    elseif type(card._audio_url) == "string" and card._audio_url ~= "" then
+        pcall(function()
+            local AudioGenerator = require("audio_generator")
+            mp3_bytes = AudioGenerator.download_url(card._audio_url)
+        end)
+    end
+    if not mp3_bytes then
         local tts_api_key = tts_config and tts_config.elevenlabs_api_key
         local tts_on      = (config and config.tts_enabled)
                           or (tts_config and tts_config.tts_enabled)

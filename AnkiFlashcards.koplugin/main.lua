@@ -119,6 +119,36 @@ local function get_anki_config()
     return cfg
 end
 
+-- Build an image-generator config for a card.  When the image provider is
+-- "ankivocab", copies CONFIGURATION and adds the keys the generator needs
+-- to poll the API for the image URL.
+local function make_image_config(card)
+    local cfg = CONFIGURATION
+    if CONFIGURATION.image_provider == "ankivocab" then
+        cfg = {}
+        for k, v in pairs(CONFIGURATION) do cfg[k] = v end
+        cfg.image_provider = "ankivocab"
+        if type(card._image_url) == "string" and card._image_url ~= "" then
+            cfg._ankivocab_image_url = card._image_url
+        end
+        -- Use the original word sent to the API (persisted on card), falling
+        -- back to the canonical phrase.  The API indexes by original word, so
+        -- polling with the canonical form may not find the cached image.
+        cfg._ankivocab_word = card._ankivocab_word or card.phrase
+    end
+    return cfg
+end
+
+-- Return true if the card has enough info to kick off image generation.
+-- For ankivocab, only trigger if the card was actually created via AnkiVocab
+-- (_ankivocab_word is set), not just because the current provider is ankivocab.
+local function can_generate_image(card, img_cfg)
+    local has_prompt = card.image_prompt and card.image_prompt ~= ""
+    local is_ankivocab_card = img_cfg.image_provider == "ankivocab"
+                          and card._ankivocab_word and card._ankivocab_word ~= ""
+    return has_prompt or is_ankivocab_card
+end
+
 -- ── Quick Lookup cache + popup (purple highlights) ──────────────────────────
 local quick_lookup_cache = {}
 
@@ -339,9 +369,8 @@ function AnkiFlashcards:init()
                     card.highlight_pos0 = highlight_pos0
                     card.highlight_pos1 = highlight_pos1
 
-                    -- AnkiVocab audio is generated server-side and available
-                    -- in the .apkg export — no need to download to the Kobo.
-                    card._audio_url = nil
+                    -- Keep _audio_url so AnkiConnect can download and attach
+                    -- the server-generated audio when sending to Anki.
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
                     local viewer_ref = {}
@@ -523,17 +552,9 @@ function AnkiFlashcards:init()
                     viewer_ref[1] = initial_viewer
 
                     -- Start image generation in background.
-                    -- When ankivocab returns an image URL, pass it to the image
-                    -- generator via a temporary config key.
-                    local img_config = CONFIGURATION
-                    if type(card._image_url) == "string" and card._image_url ~= "" then
-                        img_config = {}
-                        for k, v in pairs(CONFIGURATION) do img_config[k] = v end
-                        img_config.image_provider = "ankivocab"
-                        img_config._ankivocab_image_url = card._image_url
-                        card._image_url = nil
-                    end
-                    if card.image_prompt or (img_config._ankivocab_image_url) then
+                    local img_config = make_image_config(card)
+                    card._image_url = nil
+                    if can_generate_image(card, img_config) then
                         ImageGenerator.generate_async(
                             img_config,
                             card.image_prompt,
@@ -630,7 +651,10 @@ function AnkiFlashcards:init()
                                 show_back = show_back,
                                 read_only = false,
                                 on_show_answer = function()
-                                    UIManager:close(v)
+                                    -- Close whichever viewer is currently showing
+                                    -- (may differ from v after an async image update).
+                                    local cur = viewer_ref[1] or v
+                                    UIManager:close(cur)
                                     viewer_ref[1] = make_viewer(true)
                                 end,
                                 on_save = function()
@@ -687,11 +711,12 @@ function AnkiFlashcards:init()
                         end
                         viewer_ref[1] = make_viewer(false)
                         -- Auto-regenerate image if missing (e.g. synced card).
+                        local saved_img_cfg = make_image_config(card)
                         if (not card.image_path or card.image_path == "")
-                           and card.image_prompt and card.image_prompt ~= ""
+                           and can_generate_image(card, saved_img_cfg)
                            and NetworkMgr:isOnline() then
                             ImageGenerator.generate_async(
-                                CONFIGURATION,
+                                saved_img_cfg,
                                 card.image_prompt,
                                 card.phrase,
                                 function(img_path)

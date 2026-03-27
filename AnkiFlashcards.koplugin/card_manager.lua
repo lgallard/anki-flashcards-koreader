@@ -279,7 +279,10 @@ function CardManager.show(base_config, filter_book, ui)
                     show_back = show_back,
                     read_only = false,
                     on_show_answer = function()
-                        UIManager:close(v)
+                        -- Close whichever viewer is currently showing
+                        -- (may differ from v after an async image update).
+                        local cur = viewer_ref[1] or v
+                        UIManager:close(cur)
                         viewer_ref[1] = make_viewer(true)
                     end,
                     on_save = function()
@@ -391,11 +394,23 @@ function CardManager.show(base_config, filter_book, ui)
             end
             viewer_ref[1] = make_viewer(false)
             -- Auto-regenerate image if missing (e.g. synced card).
+            -- Only poll AnkiVocab for cards that were created via AnkiVocab
+            -- (_ankivocab_word is set); otherwise use the local image_prompt.
+            local img_cfg = base_config
+            local is_ankivocab_card = card._ankivocab_word and card._ankivocab_word ~= ""
+            if is_ankivocab_card then
+                img_cfg = {}
+                for k, v in pairs(base_config) do img_cfg[k] = v end
+                img_cfg.image_provider = "ankivocab"
+                img_cfg._ankivocab_word = card._ankivocab_word
+            end
+            local has_image_source = (card.image_prompt and card.image_prompt ~= "")
+                                  or is_ankivocab_card
             if (not card.image_path or card.image_path == "")
-               and card.image_prompt and card.image_prompt ~= ""
+               and has_image_source
                and NetworkMgr:isOnline() then
                 ImageGenerator.generate_async(
-                    config,
+                    img_cfg,
                     card.image_prompt,
                     card.phrase,
                     function(img_path)
