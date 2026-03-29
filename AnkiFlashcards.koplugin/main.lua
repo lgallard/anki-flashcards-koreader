@@ -4,6 +4,7 @@
 --   📚 My Cards   — opens the card manager (list of saved cards)
 
 local Device         = require("device")
+local InfoMessage    = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local NetworkMgr     = require("ui/network/manager")
 local Notification   = require("ui/widget/notification")
@@ -353,7 +354,7 @@ function AnkiFlashcards:init()
                             end)
                             return
                         end
-                        UIManager:show(Notification:new {
+                        UIManager:show(InfoMessage:new {
                             text    = _("Card generation failed: ") .. (err or "unknown"),
                             timeout = 5,
                         })
@@ -425,7 +426,7 @@ function AnkiFlashcards:init()
                                         CONFIGURATION, phrase, context, title, author
                                     )
                                     if not new_card then
-                                        UIManager:show(Notification:new {
+                                        UIManager:show(InfoMessage:new {
                                             text    = _("Regenerate failed: ") .. (new_err or "unknown"),
                                             timeout = 5,
                                         })
@@ -471,7 +472,7 @@ function AnkiFlashcards:init()
                                         UIManager:close(loading3)
                                         local new_text, new_prompt = CardGenerator.generate_text(CONFIGURATION, c.phrase)
                                         if not new_text then
-                                            UIManager:show(Notification:new {
+                                            UIManager:show(InfoMessage:new {
                                                 text    = _("Regen failed: ") .. (new_prompt or "unknown"),
                                                 timeout = 5,
                                             })
@@ -535,7 +536,7 @@ function AnkiFlashcards:init()
                                         })
                                     end,
                                     function(err)
-                                        UIManager:show(Notification:new {
+                                        UIManager:show(InfoMessage:new {
                                             text    = _("Image regen failed: ") .. (err or "unknown"),
                                             timeout = 5,
                                         })
@@ -784,7 +785,7 @@ function AnkiFlashcards:init()
                                     { ann_ref, nb_highlights_added = 0, nb_notes_added = 1 }))
                                 show_quick_lookup_popup(phrase_text, result, delete_highlight)
                             else
-                                UIManager:show(Notification:new {
+                                UIManager:show(InfoMessage:new {
                                     text    = _("Lookup failed: ") .. (err or "unknown"),
                                     timeout = 3,
                                 })

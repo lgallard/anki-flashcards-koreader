@@ -914,12 +914,12 @@ local PROVIDERS = {
 --- on_success(image_path) called when the PNG is saved locally.
 --- on_error(err_string) called on any failure; if nil, a Notification is shown.
 function ImageGenerator.generate_async(config, image_prompt, phrase, on_success, on_error)
-    -- Default on_error: show a visible notification so failures are never silent.
+    -- Default on_error: show a wrapping InfoMessage so long errors are readable on e-ink.
     if not on_error then
-        local Notification = require("ui/widget/notification")
-        local UIManager    = require("ui/uimanager")
+        local InfoMessage = require("ui/widget/infomessage")
+        local UIManager   = require("ui/uimanager")
         on_error = function(msg)
-            UIManager:show(Notification:new { text = msg, timeout = 5 })
+            UIManager:show(InfoMessage:new { text = msg, timeout = 5 })
         end
     end
 
