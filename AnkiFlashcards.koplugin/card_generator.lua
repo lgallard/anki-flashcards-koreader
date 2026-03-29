@@ -230,8 +230,18 @@ local function generate_ankivocab(config, phrase, context, title, author)
     }
 
     if tostring(code) ~= "200" then
-        local detail = table.concat(response_body):sub(1, 300)
-        return nil, "AnkiVocab HTTP " .. tostring(code) .. ": " .. detail
+        local status = tonumber(code)
+        if status == 401 then
+            return nil, "Invalid API key. Check your key in AnkiVocab Settings."
+        elseif status == 402 then
+            return nil, "No credits remaining. Visit ankivocab.com to add credits."
+        elseif status == 429 then
+            return nil, "Too many requests. Please wait and try again."
+        elseif status and status >= 500 then
+            return nil, "AnkiVocab server error. Please try again later."
+        else
+            return nil, "AnkiVocab error (" .. tostring(code) .. "). Check connection and try again."
+        end
     end
 
     local ok, data = pcall(json.decode, table.concat(response_body))

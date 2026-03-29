@@ -16,10 +16,16 @@ local ImageGenerator = require("image_generator")
 local NetworkMgr     = require("ui/network/manager")
 local SettingsViewer = require("settings_viewer")
 
+local InfoMessage   = require("ui/widget/infomessage")
+
 local CardManager = {}
 
 local function notify(text)
     UIManager:show(Notification:new { text = text })
+end
+
+local function notify_error(text)
+    UIManager:show(InfoMessage:new { text = text, timeout = 5 })
 end
 
 -- Handles both full CONFIGURATION (with nested .anki) and a flat Anki-only table.
@@ -44,7 +50,7 @@ end
 
 local function send_one(anki_config, card, tts_config)
     if not is_anki_ready(anki_config) then
-        notify(_("Anki URL not set. Use Manage > Anki Settings."))
+        notify_error(_("Anki URL not set. Use Manage > Anki Settings."))
         return false
     end
     local ok, err = AnkiSync.send_card(anki_config, card, tts_config)
@@ -52,7 +58,7 @@ local function send_one(anki_config, card, tts_config)
         CardStorage.mark_sent(card.phrase)
         return true
     else
-        notify(_("Anki error: ") .. (err or "unknown"))
+        notify_error(_("Anki error: ") .. (err or "unknown"))
         return false
     end
 end
@@ -314,7 +320,7 @@ function CardManager.show(base_config, filter_book, ui)
                                 UIManager:close(loading_t)
                                 local new_text, new_prompt = CardGenerator.generate_text(base_config, card.phrase)
                                 if not new_text then
-                                    notify(_("Regen failed: ") .. (new_prompt or "unknown"))
+                                    notify_error(_("Regen failed: ") .. (new_prompt or "unknown"))
                                     viewer_ref[1] = make_viewer(true)
                                     return
                                 end
@@ -365,7 +371,7 @@ function CardManager.show(base_config, filter_book, ui)
                                 notify(_("New image loaded!"))
                             end,
                             function(err)
-                                notify(_("Image regen failed: ") .. (err or "unknown"))
+                                notify_error(_("Image regen failed: ") .. (err or "unknown"))
                             end
                         )
                     end,
@@ -383,7 +389,7 @@ function CardManager.show(base_config, filter_book, ui)
                                     if still_shown then new_viewer:update() end
                                     notify(_("IPA updated"))
                                 else
-                                    notify(_("IPA regen failed: ") .. (err or "unknown"))
+                                    notify_error(_("IPA regen failed: ") .. (err or "unknown"))
                                 end
                             end)
                         end)

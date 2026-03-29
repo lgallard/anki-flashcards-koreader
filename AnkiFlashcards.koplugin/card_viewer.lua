@@ -16,6 +16,7 @@ local FrameContainer   = require("ui/widget/container/framecontainer")
 local Geom             = require("ui/geometry")
 local GestureRange     = require("ui/gesturerange")
 local ImageWidget      = require("ui/widget/imagewidget")
+local InfoMessage      = require("ui/widget/infomessage")
 local InputContainer   = require("ui/widget/container/inputcontainer")
 local InputDialog      = require("ui/widget/inputdialog")
 local MovableContainer = require("ui/widget/container/movablecontainer")
@@ -168,7 +169,7 @@ function CardViewer:init()
                         local btn = self.button_table:getButtonById("save")
                         if btn then btn:disable(); btn:refresh() end
                     else
-                        UIManager:show(Notification:new { text = err or _("Could not save") })
+                        UIManager:show(InfoMessage:new { text = err or _("Could not save"), timeout = 5 })
                     end
                 end
             end,
@@ -182,8 +183,9 @@ function CardViewer:init()
                     if ok then
                         UIManager:show(Notification:new { text = _("Sent to Anki!") })
                     else
-                        UIManager:show(Notification:new {
+                        UIManager:show(InfoMessage:new {
                             text = _("Anki error: ") .. (err or "unknown"),
+                            timeout = 5,
                         })
                     end
                 end
