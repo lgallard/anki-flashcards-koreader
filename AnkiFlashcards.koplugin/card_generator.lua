@@ -120,32 +120,26 @@ end
 
 -- Single-call prompt: returns raw JSON, no markdown fences.
 -- {language} is replaced at call time with config.target_language.
-local PROMPT_TEMPLATE = [[You are a {language} flashcard generator for an advanced learner reading "{title}" by "{author}".
-Highlighted: "{phrase}"
-Context: "...{context}..."
+local PROMPT_TEMPLATE = [[{language} flashcard for "{phrase}" from "{title}" by "{author}".
+Context (for meaning only, do NOT use its words): "...{context}..."
 
-IMPORTANT: The highlighted text "{phrase}" is your PRIMARY input. Generate a card for THIS phrase only.
-Do NOT extract a different word or expression from the Context — it is provided ONLY to help you
-understand the meaning of the highlighted text.
-
-Return ONLY a valid JSON object, no other text:
+Generate a card for the highlighted phrase ONLY. Return valid JSON, no other text:
 {
-  "phrase": "<canonical form of EXACTLY the highlighted text, all lowercase: (1) use infinitive/base form — e.g. 'cranked up' → 'crank up'; (2) replace specific pronouns with generic equivalents as appropriate; NEVER substitute a different phrase from the context>",
-  "ipa": "<pronunciation notation for the canonical phrase — use IPA for European languages, pinyin for Mandarin, romaji for Japanese, or the standard phonetic notation for {language}>",
-  "definition": "<context-aware definition using simple everyday {language} words, max 20 words; the definition itself must NOT contain difficult or rare vocabulary>",
-  "synonyms": "<up to 3 common, high-frequency synonyms in {language} for the canonical phrase, comma-separated; avoid rare or literary words>",
-  "text": "<SHORT example sentence in {language} (max 15 words) at intermediate level: use simple grammar and everyday vocabulary — the highlighted phrase must be the ONLY challenging word; create a FRESH scenario completely unrelated to the book — do NOT borrow wording, subjects, or settings from the Context; invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
-  "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
+  "phrase": "<highlighted text in lowercase base/infinitive form, e.g. 'cranked up' → 'crank up'; use generic pronouns; never substitute a context word>",
+  "ipa": "<IPA for European langs, pinyin for Mandarin, romaji for Japanese, or standard {language} notation>",
+  "definition": "<context-aware, simple {language} words, max 20 words>",
+  "synonyms": "<up to 3 common {language} synonyms, comma-separated>",
+  "text": "<{language} sentence, max 15 words, simple grammar; phrase is the only hard word; fresh scenario unrelated to the book; conjugate naturally; wrap with {{c1::...}} as it appears in the sentence, not the canonical form>",
+  "image_prompt": "<vivid scene from the sentence, anime-style, widescreen 16:9, no text>"
 }]]
 
 -- Sentence-only regeneration prompt: returns text (cloze) + image_prompt.
-local TEXT_REGEN_PROMPT = [[You are a {language} flashcard generator.
-Phrase: "{phrase}"
+local TEXT_REGEN_PROMPT = [[{language} flashcard. Phrase: "{phrase}"
 
-Return ONLY a valid JSON object, no other text:
+Return valid JSON, no other text:
 {
-  "text": "<SHORT example sentence in {language} (max 15 words) at intermediate level: use simple grammar and everyday vocabulary — the phrase must be the ONLY challenging word; create a FRESH scenario — invent new characters and a new situation; conjugate the phrase NATURALLY to fit the sentence grammar (correct tense, person, number); {{c1::...}} must wrap ONLY the phrase as it naturally appears in this sentence — it MAY differ from the canonical form above; do NOT force the neutralized/canonical form into the sentence; no extra words around it inside the cloze>",
-  "image_prompt": "<vivid scene description from the example sentence above, suitable for anime-style illustration, widescreen 16:9, no text or words in the scene>"
+  "text": "<{language} sentence, max 15 words, simple grammar; phrase is the only hard word; fresh scenario; conjugate naturally; wrap with {{c1::...}} as it appears in the sentence, not the canonical form>",
+  "image_prompt": "<vivid scene from the sentence, anime-style, widescreen 16:9, no text>"
 }]]
 
 -- ── Helpers ───────────────────────────────────────────────────────────────
