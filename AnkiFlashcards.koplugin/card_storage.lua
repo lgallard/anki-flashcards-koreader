@@ -122,6 +122,20 @@ function CardStorage.update_image_path(phrase, path)
     return false
 end
 
+-- Update _audio_url on an already-saved card (called after async polling).
+function CardStorage.update_audio_url(phrase, url)
+    local key     = normalize(phrase)
+    local entries = load_raw()
+    for _, e in ipairs(entries) do
+        if normalize(e.phrase) == key then
+            e._audio_url = url
+            save_raw(entries)
+            return true
+        end
+    end
+    return false
+end
+
 -- Update editable fields of an already-saved card (matched by original phrase).
 -- Does not touch book metadata, image_path, date or sent_to_anki.
 function CardStorage.update_card(original_phrase, new_card)

@@ -1,6 +1,6 @@
--- ElevenLabs TTS audio generator.
--- Synchronous — generates MP3 bytes for a card's phrase + example sentence.
--- Returns raw MP3 data (string) for base64 encoding + AnkiConnect upload.
+-- Audio generator — ElevenLabs TTS and AnkiVocab async polling.
+-- Synchronous helpers return raw MP3 bytes for base64 encoding + AnkiConnect upload.
+-- Async helper polls AnkiVocab for server-generated audio URLs.
 
 local https = require("ssl.https")
 local http  = require("socket.http")
@@ -112,6 +112,75 @@ function AudioGenerator.generate(config, card)
     end
 
     return mp3_bytes
+end
+
+-- ── AnkiVocab async audio polling ────────────────────────────────────────
+
+-- Poll the AnkiVocab API until audio_url is available, then call on_success.
+-- Mirrors the image polling pattern in image_generator.lua.
+-- config: table with ankivocab_url, ankivocab_api_key
+-- word:   the original word sent to the API
+-- on_success(audio_url): called when the audio URL is ready
+-- on_error(err):         called on timeout or failure (optional)
+function AudioGenerator.poll_ankivocab_async(config, word, on_success, on_error)
+    local UIManager = require("ui/uimanager")
+
+    local api_url = config.ankivocab_url
+    local api_key = config.ankivocab_api_key
+    if not api_url or api_url == "" or not api_key or api_key == "" then
+        if on_error then on_error("AnkiVocab not configured") end
+        return
+    end
+    api_url = api_url:gsub("/$", "")
+    local endpoint = api_url .. "/v1/cards/generate"
+
+    local attempts = 0
+    local max_attempts = 6  -- 6 × 10s = 60s
+
+    local function poll()
+        attempts = attempts + 1
+        if attempts > max_attempts then
+            if on_error then on_error("Audio not ready after polling") end
+            return
+        end
+
+        local body = json.encode({
+            word          = word,
+            include_image = false,
+            include_audio = true,
+        })
+        local response_body = {}
+        local requester = endpoint:find("^https") and https or http
+        local saved_timeout = requester.TIMEOUT
+        requester.TIMEOUT = 10
+        local poll_ok, poll_code = pcall(function()
+            return select(2, requester.request {
+                url     = endpoint,
+                method  = "POST",
+                headers = {
+                    ["Content-Type"]  = "application/json",
+                    ["X-API-Key"]     = api_key,
+                    ["Content-Length"] = tostring(#body),
+                },
+                source = ltn12.source.string(body),
+                sink   = ltn12.sink.table(response_body),
+            })
+        end)
+        requester.TIMEOUT = saved_timeout
+
+        if poll_ok and tostring(poll_code) == "200" then
+            local ok, data = pcall(json.decode, table.concat(response_body))
+            if ok and data and type(data.audio_url) == "string" and data.audio_url ~= "" then
+                if on_success then on_success(data.audio_url) end
+                return
+            end
+        end
+
+        UIManager:scheduleIn(10, poll)
+    end
+
+    -- First poll after 10s to give the server time to generate.
+    UIManager:scheduleIn(10, poll)
 end
 
 return AudioGenerator

@@ -572,6 +572,21 @@ function AnkiFlashcards:init()
                             nil  -- image errors are non-fatal
                         )
                     end
+
+                    -- Poll for audio URL in background when AnkiVocab
+                    -- generated it asynchronously (audio_status = "pending").
+                    if card._audio_status == "pending"
+                       and card._ankivocab_word and card._ankivocab_word ~= "" then
+                        AudioGenerator.poll_ankivocab_async(
+                            CONFIGURATION,
+                            card._ankivocab_word,
+                            function(audio_url)
+                                card._audio_url = audio_url
+                                CardStorage.update_audio_url(card.phrase, audio_url)
+                            end,
+                            nil  -- audio polling errors are non-fatal
+                        )
+                    end
                 end
 
                 NetworkMgr:runWhenOnline(function()
