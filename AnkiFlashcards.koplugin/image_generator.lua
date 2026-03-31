@@ -809,7 +809,7 @@ local function ankivocab_poll_image_url(config, word)
     local body = json.encode({
         word          = word,
         include_image = true,
-        include_audio = true,
+        include_audio = false,
     })
     local response_body = {}
     local requester = endpoint:find("^https") and https or http

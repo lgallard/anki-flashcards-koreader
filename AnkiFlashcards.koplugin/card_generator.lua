@@ -251,8 +251,9 @@ local function generate_ankivocab(config, phrase, context, title, author)
         image_prompt = data.image_prompt or "",
         source       = data.source or "",
         -- Media URLs for later download by image/audio generators.
-        _image_url   = data.image_url,
-        _audio_url   = data.audio_url,
+        _image_url    = data.image_url,
+        _audio_url    = data.audio_url,
+        _audio_status = data.audio_status,
         -- Original word sent to the API (for image polling lookups).
         _ankivocab_word = phrase,
     }
