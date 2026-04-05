@@ -46,7 +46,7 @@ local CONFIGURATION = {
     tts_enabled         = false,
 
     -- ── AnkiVocab Gateway (optional) ─────────────────────────────────────────
-    -- URL defaults to https://api.ankivocab.com — only override for dev/testing.
+    -- URL defaults to https://ankivocab.com — only override for dev/testing.
     -- ankivocab_url = "http://localhost:8000",
 
     -- ── Anki integration ────────────────────────────────────────────────────
