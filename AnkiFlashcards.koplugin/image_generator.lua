@@ -798,7 +798,7 @@ end
 -- in the initial card generation response.  Returns (url, nil) or (nil, err).
 -- IMPORTANT: this runs inside UIManager callbacks, so the HTTP timeout must be
 -- short to avoid freezing the e-ink UI.
-local ANKIVOCAB_DEFAULT_URL = "https://api.ankivocab.com"
+local ANKIVOCAB_DEFAULT_URL = "https://ankivocab.com"
 
 local function ankivocab_poll_image_url(config, word)
     local api_url = config.ankivocab_url

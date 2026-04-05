@@ -286,7 +286,7 @@ function SettingsViewer.show(base_config, on_saved)
 
         local function check_credits()
             local api_url = cfg.ankivocab_url
-            if not api_url or api_url == "" then api_url = "https://api.ankivocab.com" end
+            if not api_url or api_url == "" then api_url = "https://ankivocab.com" end
             local api_key = cfg.ankivocab_api_key
             if not api_key or api_key == "" then
                 UIManager:show(Notification:new {

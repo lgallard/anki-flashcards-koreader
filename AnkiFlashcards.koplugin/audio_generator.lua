@@ -12,7 +12,7 @@ local DEFAULT_VOICE = "JBFqnCBsd6RMkjVDRZzb"  -- Rachel
 local DEFAULT_MODEL = "eleven_multilingual_v2"
 local OUTPUT_FORMAT = "mp3_22050_32"
 local TIMEOUT              = 10
-local ANKIVOCAB_DEFAULT_URL = "https://api.ankivocab.com"
+local ANKIVOCAB_DEFAULT_URL = "https://ankivocab.com"
 
 local AudioGenerator = {}
 

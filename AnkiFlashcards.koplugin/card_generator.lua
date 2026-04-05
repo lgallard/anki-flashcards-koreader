@@ -17,7 +17,7 @@ local TIMEOUT = 20
 https.TIMEOUT = TIMEOUT
 http.TIMEOUT  = TIMEOUT
 
-local ANKIVOCAB_DEFAULT_URL = "https://api.ankivocab.com"
+local ANKIVOCAB_DEFAULT_URL = "https://ankivocab.com"
 
 local CardGenerator = {}
 
