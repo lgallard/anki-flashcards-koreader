@@ -286,10 +286,11 @@ function SettingsViewer.show(base_config, on_saved)
 
         local function check_credits()
             local api_url = cfg.ankivocab_url
+            if not api_url or api_url == "" then api_url = "https://api.ankivocab.com" end
             local api_key = cfg.ankivocab_api_key
-            if not api_url or api_url == "" or not api_key or api_key == "" then
+            if not api_key or api_key == "" then
                 UIManager:show(Notification:new {
-                    text = _("Set AnkiVocab URL and API key first"),
+                    text = _("Set AnkiVocab API key first"),
                     timeout = 3,
                 })
                 return
@@ -333,12 +334,6 @@ function SettingsViewer.show(base_config, on_saved)
         sub_dlg = ButtonDialog:new {
             title   = _("AnkiVocab Gateway"),
             buttons = {
-                {{ text = _("URL: ") .. short("ankivocab_url"),
-                   callback = function()
-                       UIManager:close(sub_dlg)
-                       edit_field("AnkiVocab URL", "ankivocab_url",
-                                 "https://api.ankivocab.com", show_ankivocab_gateway)
-                   end }},
                 {{ text = _("API Key: ") .. mask_key(cfg.ankivocab_api_key or ""),
                    callback = function()
                        UIManager:close(sub_dlg)

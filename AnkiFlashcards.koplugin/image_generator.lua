@@ -798,11 +798,14 @@ end
 -- in the initial card generation response.  Returns (url, nil) or (nil, err).
 -- IMPORTANT: this runs inside UIManager callbacks, so the HTTP timeout must be
 -- short to avoid freezing the e-ink UI.
+local ANKIVOCAB_DEFAULT_URL = "https://api.ankivocab.com"
+
 local function ankivocab_poll_image_url(config, word)
     local api_url = config.ankivocab_url
+    if not api_url or api_url == "" then api_url = ANKIVOCAB_DEFAULT_URL end
     local api_key = config.ankivocab_api_key
-    if not api_url or api_url == "" or not api_key or api_key == "" then
-        return nil, "AnkiVocab not configured"
+    if not api_key or api_key == "" then
+        return nil, "AnkiVocab API key not configured"
     end
     api_url = api_url:gsub("/$", "")
     local endpoint = api_url .. "/v1/cards/generate"
