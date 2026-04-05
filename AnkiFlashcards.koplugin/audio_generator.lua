@@ -11,7 +11,8 @@ local BASE_URL      = "https://api.elevenlabs.io/v1/text-to-speech/"
 local DEFAULT_VOICE = "JBFqnCBsd6RMkjVDRZzb"  -- Rachel
 local DEFAULT_MODEL = "eleven_multilingual_v2"
 local OUTPUT_FORMAT = "mp3_22050_32"
-local TIMEOUT       = 10
+local TIMEOUT              = 10
+local ANKIVOCAB_DEFAULT_URL = "https://api.ankivocab.com"
 
 local AudioGenerator = {}
 
@@ -126,9 +127,10 @@ function AudioGenerator.poll_ankivocab_async(config, word, on_success, on_error)
     local UIManager = require("ui/uimanager")
 
     local api_url = config.ankivocab_url
+    if not api_url or api_url == "" then api_url = ANKIVOCAB_DEFAULT_URL end
     local api_key = config.ankivocab_api_key
-    if not api_url or api_url == "" or not api_key or api_key == "" then
-        if on_error then on_error("AnkiVocab not configured") end
+    if not api_key or api_key == "" then
+        if on_error then on_error("AnkiVocab API key not configured") end
         return
     end
     api_url = api_url:gsub("/$", "")

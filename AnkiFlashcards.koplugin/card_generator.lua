@@ -17,6 +17,8 @@ local TIMEOUT = 20
 https.TIMEOUT = TIMEOUT
 http.TIMEOUT  = TIMEOUT
 
+local ANKIVOCAB_DEFAULT_URL = "https://api.ankivocab.com"
+
 local CardGenerator = {}
 
 -- ── Shared LLM helper ────────────────────────────────────────────────────
@@ -174,7 +176,7 @@ end
 local function generate_ankivocab(config, phrase, context, title, author)
     local api_url = config.ankivocab_url
     if not api_url or api_url == "" then
-        return nil, "AnkiVocab URL not configured"
+        api_url = ANKIVOCAB_DEFAULT_URL
     end
     local api_key = config.ankivocab_api_key
     if not api_key or api_key == "" then

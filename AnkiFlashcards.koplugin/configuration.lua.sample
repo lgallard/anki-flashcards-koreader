@@ -45,6 +45,10 @@ local CONFIGURATION = {
     elevenlabs_voice_id = "JBFqnCBsd6RMkjVDRZzb",  -- Rachel (default)
     tts_enabled         = false,
 
+    -- ── AnkiVocab Gateway (optional) ─────────────────────────────────────────
+    -- URL defaults to https://api.ankivocab.com — only override for dev/testing.
+    -- ankivocab_url = "http://localhost:8000",
+
     -- ── Anki integration ────────────────────────────────────────────────────
     -- Requires AnkiConnect add-on running on the same network as your Kobo.
     -- Use the LAN IP of the device running Anki — not "localhost".

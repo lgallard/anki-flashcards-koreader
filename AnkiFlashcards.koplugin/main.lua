@@ -47,7 +47,6 @@ do
             "openrouter_api_key",
             "openrouter_model",
             "elevenlabs_api_key",
-            "ankivocab_url",
             "ankivocab_api_key",
         }) do
             if saved_anki[key] and saved_anki[key] ~= "" then
