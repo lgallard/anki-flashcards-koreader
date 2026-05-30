@@ -23,12 +23,24 @@ function SettingsViewer.show(base_config, on_saved)
             if k ~= "anki" then cfg[k] = v end
         end
         if type(base_config.anki) == "table" then
-            for k, v in pairs(base_config.anki) do cfg[k] = v end
+            for k, v in pairs(base_config.anki) do
+                if k == "model" then
+                    cfg.anki_model = v
+                else
+                    cfg[k] = v
+                end
+            end
         end
     end
     local saved = CardStorage.load_anki_settings()
     if saved then
         for k, v in pairs(saved) do cfg[k] = v end
+        -- Older settings used cfg.model for the Anki note type.  Keep those
+        -- users working while freeing cfg.model for the DashScope text model.
+        if not saved.anki_model and (saved.model == "Vocabulary" or saved.model == "English") then
+            cfg.anki_model = saved.model
+            cfg.model = base_config and base_config.model or "qwen-plus"
+        end
     end
 
     -- ── Shared helpers ───────────────────────────────────────────────────
@@ -139,10 +151,10 @@ function SettingsViewer.show(base_config, on_saved)
         local buttons = {}
 
         table.insert(buttons, {{
-            text     = _("Note type: ") .. (cfg.model or "Vocabulary"),
+            text     = _("Note type: ") .. (cfg.anki_model or "Vocabulary"),
             callback = function()
                 UIManager:close(sub_dlg)
-                edit_field("Note Type", "model", "Vocabulary",
+                edit_field("Note Type", "anki_model", "Vocabulary",
                           show_anki_connection)
             end,
         }})
@@ -217,6 +229,24 @@ function SettingsViewer.show(base_config, on_saved)
         local TEXT_PROVIDERS  = { "dashscope", "gemini", "openai", "openrouter", "ankivocab" }
         local IMAGE_PROVIDERS = { "dashscope", "gemini", "openai", "openrouter", "pollinations", "ankivocab" }
 
+        local TEXT_MODEL_FIELDS = {
+            dashscope  = { key = "model",             label = "Text model",  hint = "qwen-plus" },
+            gemini     = { key = "gemini_text_model", label = "Text model",  hint = "gemini-2.5-flash" },
+            openai     = { key = "openai_model",      label = "Text model",  hint = "gpt-4o-mini" },
+            openrouter = { key = "openrouter_model",  label = "Text model",  hint = "deepseek/deepseek-v3:free" },
+        }
+
+        local IMAGE_MODEL_FIELDS = {
+            dashscope  = { key = "image_model",              label = "Image model", hint = "qwen-image-plus" },
+            gemini     = { key = "gemini_image_model",       label = "Image model", hint = "gemini-2.5-flash-image" },
+            openai     = { key = "openai_image_model",       label = "Image model", hint = "gpt-image-1" },
+            openrouter = {
+                key   = "openrouter_image_model",
+                label = "Image model",
+                hint  = "google/gemini-3.1-flash-image-preview",
+            },
+        }
+
         local function cycle(key, options)
             local cur = cfg[key] or options[1]
             local idx = 1
@@ -229,16 +259,43 @@ function SettingsViewer.show(base_config, on_saved)
             show_ai_providers()
         end
 
+        local buttons = {
+            {{ text = _("Text: ") .. (cfg.text_provider or "dashscope"),
+               callback = function() cycle("text_provider", TEXT_PROVIDERS) end }},
+            {{ text = _("Image: ") .. (cfg.image_provider or "dashscope"),
+               callback = function() cycle("image_provider", IMAGE_PROVIDERS) end }},
+        }
+
+        local text_model = TEXT_MODEL_FIELDS[cfg.text_provider or "dashscope"]
+        if text_model then
+            table.insert(buttons, {{
+                text = _(text_model.label .. ": ") .. short(text_model.key, 42),
+                callback = function()
+                    UIManager:close(sub_dlg)
+                    edit_field(text_model.label, text_model.key, text_model.hint,
+                              show_ai_providers)
+                end,
+            }})
+        end
+
+        local image_model = IMAGE_MODEL_FIELDS[cfg.image_provider or "dashscope"]
+        if image_model then
+            table.insert(buttons, {{
+                text = _(image_model.label .. ": ") .. short(image_model.key, 42),
+                callback = function()
+                    UIManager:close(sub_dlg)
+                    edit_field(image_model.label, image_model.key, image_model.hint,
+                              show_ai_providers)
+                end,
+            }})
+        end
+
+        table.insert(buttons, {{ text = _("Back"),
+           callback = function() UIManager:close(sub_dlg); show_main() end }})
+
         sub_dlg = ButtonDialog:new {
             title   = _("AI Providers"),
-            buttons = {
-                {{ text = _("Text: ") .. (cfg.text_provider or "dashscope"),
-                   callback = function() cycle("text_provider", TEXT_PROVIDERS) end }},
-                {{ text = _("Image: ") .. (cfg.image_provider or "dashscope"),
-                   callback = function() cycle("image_provider", IMAGE_PROVIDERS) end }},
-                {{ text = _("Back"),
-                   callback = function() UIManager:close(sub_dlg); show_main() end }},
-            },
+            buttons = buttons,
         }
         UIManager:show(sub_dlg)
     end

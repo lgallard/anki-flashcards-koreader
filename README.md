@@ -138,7 +138,8 @@ Supported languages include: English, Spanish, French, German, Italian, Portugue
    local CONFIGURATION = {
        dashscope_api_key = "YOUR_DASHSCOPE_API_KEY",
        provider          = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
-       model             = "qwen-plus",
+       model             = "qwen-plus",        -- text model
+       image_model       = "qwen-image-plus",  -- image model
 
        -- Optional: ElevenLabs TTS audio
        elevenlabs_api_key  = "YOUR_ELEVENLABS_API_KEY",
@@ -235,7 +236,7 @@ No setup needed — just switch **Image Provider** to `pollinations`. No API key
 
 ## Configuration via Settings UI
 
-You can set the Anki URL, deck, tags, text/image providers, API keys, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
+You can set the Anki URL, deck, tags, text/image providers, provider model names, API keys, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
 
 ## License
 

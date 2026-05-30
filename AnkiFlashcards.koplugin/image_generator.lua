@@ -104,7 +104,6 @@ end
 local DASHSCOPE_BASE_URL  = "https://dashscope-intl.aliyuncs.com/api/v1"
 local DASHSCOPE_CREATE_URL = DASHSCOPE_BASE_URL .. "/services/aigc/text2image/image-synthesis"
 local DASHSCOPE_TASK_URL   = DASHSCOPE_BASE_URL .. "/tasks/"
-local DASHSCOPE_MODEL      = "qwen-image-plus"
 
 local NEGATIVE_PROMPT =
     "text, words, letters, numbers, watermark, signature, blurry, " ..
@@ -143,13 +142,13 @@ local function dashscope_https_request(method, url, api_key, body, extra_headers
     return data
 end
 
-local function dashscope_create_task(api_key, image_prompt)
+local function dashscope_create_task(config, api_key, image_prompt)
     local prompt =
         "Modern anime-style illustration: " .. (image_prompt or "") ..
         ". Widescreen 16:9 composition, vibrant colors, clean lines, " ..
         "professional quality. No text, words, letters or numbers anywhere."
     local body = json.encode({
-        model  = DASHSCOPE_MODEL,
+        model  = config.image_model or "qwen-image-plus",
         input  = {
             prompt          = prompt,
             negative_prompt = NEGATIVE_PROMPT,
@@ -230,7 +229,7 @@ local function dashscope_generate(config, image_prompt, phrase, on_success, on_e
     end
 
     local function try_create()
-        local task_id, err = dashscope_create_task(api_key, image_prompt)
+        local task_id, err = dashscope_create_task(config, api_key, image_prompt)
         if not task_id then
             if err == "RATE_LIMITED" then
                 UIManager:scheduleIn(15, try_create)
@@ -364,9 +363,7 @@ end
 
 -- ── Gemini Flash provider ──────────────────────────────────────────────────
 
-local GEMINI_URL =
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    .. "gemini-2.5-flash-image:generateContent"
+local GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
 
 local function gemini_generate(config, image_prompt, phrase, on_success, on_error)
     local api_key = config and config.gemini_api_key
@@ -394,10 +391,11 @@ local function gemini_generate(config, image_prompt, phrase, on_success, on_erro
             },
         })
 
+        local model = config.gemini_image_model or "gemini-2.5-flash-image"
         local response = {}
         https.TIMEOUT = 30
         local _, code = https.request {
-            url     = GEMINI_URL .. "?key=" .. api_key,
+            url     = GEMINI_BASE_URL .. model .. ":generateContent?key=" .. api_key,
             method  = "POST",
             headers = {
                 ["Content-Type"]   = "application/json",
