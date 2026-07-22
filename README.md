@@ -236,3 +236,7 @@ No setup needed — just switch **Image Provider** to `pollinations`. No API key
 ## Configuration via Settings UI
 
 You can set the Anki URL, deck, tags, text/image providers, API keys, and TTS settings directly on the device without editing `configuration.lua`: long-press any text → **Anki Manage** → **Anki Settings**.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE). You are free to use, copy, modify, distribute, sublicense, and sell the software, provided that you include the copyright and license notice in copies or substantial portions of it.
