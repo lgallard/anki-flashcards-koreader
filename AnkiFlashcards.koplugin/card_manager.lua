@@ -37,7 +37,18 @@ local function effective_config(base)
     end
     local saved = CardStorage.load_anki_settings()
     if saved then
-        for k, v in pairs(saved) do cfg[k] = v end
+        for k, v in pairs(saved) do
+            if k == "anki_model" then
+                cfg.model = v
+            elseif k == "model" and (v == "Vocabulary" or v == "English") then
+                cfg.model = v
+            elseif k ~= "model" and k ~= "image_model"
+               and k ~= "gemini_text_model" and k ~= "gemini_image_model"
+               and k ~= "openai_model" and k ~= "openai_image_model"
+               and k ~= "openrouter_model" and k ~= "openrouter_image_model" then
+                cfg[k] = v
+            end
+        end
     end
     return cfg
 end
@@ -125,11 +136,18 @@ function CardManager.show_manage(base_config, opts)
                         "target_language",
                         "text_provider",
                         "image_provider",
+                        "model",
+                        "image_model",
+                        "gemini_text_model",
+                        "gemini_image_model",
+                        "openai_model",
+                        "openai_image_model",
                         "dashscope_api_key",
                         "gemini_api_key",
                         "openai_api_key",
                         "openrouter_api_key",
                         "openrouter_model",
+                        "openrouter_image_model",
                         "elevenlabs_api_key",
                     }) do
                         if new_cfg[key] then
