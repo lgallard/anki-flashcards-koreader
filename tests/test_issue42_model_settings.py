@@ -53,10 +53,21 @@ def test_configuration_sample_documents_model_keys():
         assert key in sample
 
 
-def test_legacy_anki_model_does_not_override_text_model():
+def test_legacy_custom_anki_model_migrates_without_overriding_text_model():
     settings = read("settings_viewer.lua")
     main = read("main.lua")
+    manager = read("card_manager.lua")
 
-    assert "cfg.anki_model = saved.model" in settings
+    assert 'if not saved.anki_model and saved.model and saved.model ~= "" then' in settings
+    assert 'if not saved_anki.anki_model and saved_anki.model and saved_anki.model ~= "" then' in main
+    assert "saved_anki.anki_model = saved_anki.model" in main
+    assert "saved_anki.model = nil" in main
     assert 'cfg.model = base_config and base_config.model or "qwen-plus"' in settings
-    assert 'key ~= "model" or (saved_anki[key] ~= "Vocabulary"' in main
+    assert 'elseif k == "model" and not fresh.anki_model then' in main
+    assert 'elseif k == "model" and not saved.anki_model then' in manager
+
+    # Legacy `model` is an Anki note type, not a provider model. Do not
+    # classify a user-defined note type with a hard-coded allowlist.
+    migration = main.split("CONFIGURATION.anki = saved_anki", 1)[0]
+    assert "Vocabulary" not in migration
+    assert "English" not in migration

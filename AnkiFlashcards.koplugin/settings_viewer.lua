@@ -37,7 +37,7 @@ function SettingsViewer.show(base_config, on_saved)
         for k, v in pairs(saved) do cfg[k] = v end
         -- Older settings used cfg.model for the Anki note type.  Keep those
         -- users working while freeing cfg.model for the DashScope text model.
-        if not saved.anki_model and (saved.model == "Vocabulary" or saved.model == "English") then
+        if not saved.anki_model and saved.model and saved.model ~= "" then
             cfg.anki_model = saved.model
             cfg.model = base_config and base_config.model or "qwen-plus"
         end

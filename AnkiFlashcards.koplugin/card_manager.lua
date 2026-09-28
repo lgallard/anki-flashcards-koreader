@@ -40,7 +40,7 @@ local function effective_config(base)
         for k, v in pairs(saved) do
             if k == "anki_model" then
                 cfg.model = v
-            elseif k == "model" and (v == "Vocabulary" or v == "English") then
+            elseif k == "model" and not saved.anki_model then
                 cfg.model = v
             elseif k ~= "model" and k ~= "image_model"
                and k ~= "gemini_text_model" and k ~= "gemini_image_model"

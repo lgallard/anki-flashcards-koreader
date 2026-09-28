@@ -35,6 +35,14 @@ do
     local saved_anki = CardStorage.load_anki_settings()
     if saved_anki then
         CONFIGURATION = CONFIGURATION or {}
+        -- Before #42, `model` stored the Anki note type. Move every legacy
+        -- value (including custom note types) out of the provider-model key.
+        -- Presence of `anki_model` is the format discriminator; note-type
+        -- names are user-defined and cannot be recognized from an allowlist.
+        if not saved_anki.anki_model and saved_anki.model and saved_anki.model ~= "" then
+            saved_anki.anki_model = saved_anki.model
+            saved_anki.model = nil
+        end
         CONFIGURATION.anki = saved_anki
         -- Promote plugin-level settings from saved anki settings to top level.
         for _, key in ipairs({
@@ -57,9 +65,7 @@ do
             "ankivocab_api_key",
         }) do
             if saved_anki[key] and saved_anki[key] ~= "" then
-                if key ~= "model" or (saved_anki[key] ~= "Vocabulary" and saved_anki[key] ~= "English") then
-                    CONFIGURATION[key] = saved_anki[key]
-                end
+                CONFIGURATION[key] = saved_anki[key]
             end
         end
     end
@@ -126,7 +132,7 @@ local function get_anki_config()
         for k, v in pairs(fresh) do
             if k == "anki_model" then
                 cfg.model = v
-            elseif k == "model" and (v == "Vocabulary" or v == "English") then
+            elseif k == "model" and not fresh.anki_model then
                 cfg.model = v
             elseif k ~= "model" and k ~= "image_model"
                and k ~= "gemini_text_model" and k ~= "gemini_image_model"
