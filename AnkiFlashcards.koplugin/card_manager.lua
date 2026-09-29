@@ -150,7 +150,10 @@ function CardManager.show_manage(base_config, opts)
                         "openrouter_image_model",
                         "elevenlabs_api_key",
                     }) do
-                        if new_cfg[key] then
+                        -- The plugin can run without a local configuration.lua.
+                        -- On-device settings are already persisted by SettingsViewer,
+                        -- so only mirror them when a base config table is available.
+                        if base_config and new_cfg[key] then
                             base_config[key] = new_cfg[key]
                         end
                     end
