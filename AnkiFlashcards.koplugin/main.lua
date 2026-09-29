@@ -630,6 +630,7 @@ function AnkiFlashcards:init()
                 local ui = self.ui
                 self.ui.highlight:onClose()
                 CardManager.show_manage(CONFIGURATION, {
+                    ui = ui,
                     on_inbox = function()
                         HighlightInbox.show(ui, CONFIGURATION)
                     end,
@@ -877,7 +878,7 @@ function AnkiFlashcards:init()
     UIManager:scheduleIn(45, function()
         local cfg = get_anki_config()
         if cfg.sync_server and NetworkMgr:isOnline() then
-            CardSync.run_sync(cfg.sync_server, true)
+            CardSync.run_sync(cfg.sync_server, true, self.ui)
         end
     end)
 

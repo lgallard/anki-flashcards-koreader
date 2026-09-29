@@ -154,7 +154,7 @@ function CardManager.show_manage(base_config, opts)
                             base_config[key] = new_cfg[key]
                         end
                     end
-                end)
+                end, opts and opts.ui)
             end,
         },
         {

@@ -5,7 +5,6 @@ local ButtonDialog  = require("ui/widget/buttondialog")
 local ConfirmBox    = require("ui/widget/confirmbox")
 local DataStorage   = require("datastorage")
 local Notification  = require("ui/widget/notification")
-local SyncService   = require("frontend/apps/cloudstorage/syncservice")
 local UIManager     = require("ui/uimanager")
 local json          = require("json")
 local _             = require("gettext")
@@ -15,6 +14,17 @@ local CardStorage   = require("card_storage")
 local CARDS_FILE = DataStorage:getDataDir() .. "/anki_flashcards.json"
 
 local CardSync = {}
+
+-- SyncService was moved into KOReader's Cloud Storage plugin in 2026.08.
+-- The plugin instance is available from ReaderUI on current KOReader; retain
+-- the old module as a fallback for older releases.
+local function get_sync_service(ui)
+    if ui and ui.cloudstorage then
+        return ui.cloudstorage
+    end
+    local ok, legacy_sync_service = pcall(require, "frontend/apps/cloudstorage/syncservice")
+    if ok then return legacy_sync_service end
+end
 
 -- ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -140,20 +150,24 @@ end
 
 -- ── Sync Runner ──────────────────────────────────────────────────────────
 
-function CardSync.run_sync(server, is_silent)
-    SyncService.sync(server, CARDS_FILE, CardSync.merge_cards, is_silent)
+function CardSync.run_sync(server, is_silent, ui)
+    local sync_service = get_sync_service(ui)
+    if not sync_service or not sync_service.sync then return false end
+    sync_service:sync(server, CARDS_FILE, CardSync.merge_cards, is_silent)
+    return true
 end
 
 -- ── Cloud Sync Dialog ────────────────────────────────────────────────────
 
-function CardSync.show_cloud_sync_dialog(cfg, on_saved)
+function CardSync.show_cloud_sync_dialog(cfg, on_saved, ui)
+    local sync_service = get_sync_service(ui)
+    if not sync_service then
+        UIManager:show(Notification:new { text = _("Cloud storage is unavailable."), timeout = 3 })
+        return
+    end
     if not cfg.sync_server then
         -- No server configured → open picker directly.
-        local sync_settings = SyncService:new{}
-        sync_settings.onClose = function(this)
-            UIManager:close(this)
-        end
-        sync_settings.onConfirm = function(server)
+        local on_confirm = function(server)
             cfg.sync_server = server
             CardStorage.save_anki_settings(cfg)
             if on_saved then on_saved(cfg) end
@@ -162,9 +176,16 @@ function CardSync.show_cloud_sync_dialog(cfg, on_saved)
                 timeout = 3,
             })
             -- Trigger an initial sync.
-            CardSync.run_sync(server, false)
+            CardSync.run_sync(server, false, ui)
         end
-        UIManager:show(sync_settings)
+        if sync_service.onShowCloudStorageList then
+            sync_service:onShowCloudStorageList(on_confirm)
+        else
+            local sync_settings = sync_service:new{}
+            sync_settings.onClose = function(this) UIManager:close(this) end
+            sync_settings.onConfirm = on_confirm
+            UIManager:show(sync_settings)
+        end
         return
     end
 
@@ -178,20 +199,16 @@ function CardSync.show_cloud_sync_dialog(cfg, on_saved)
                 text     = _("Sync Now"),
                 callback = function()
                     UIManager:close(dlg)
-                    CardSync.run_sync(cfg.sync_server, false)
+                    CardSync.run_sync(cfg.sync_server, false, ui)
                 end,
             }},
             {{
                 text     = _("Change Server"),
                 callback = function()
                     UIManager:close(dlg)
-                    local sync_settings = SyncService:new{}
-                    sync_settings.onClose = function(this)
-                        UIManager:close(this)
-                    end
-                    sync_settings.onConfirm = function(new_server)
+                    local on_confirm = function(new_server)
                         -- Invalidate cached baseline when changing servers.
-                        SyncService.removeLastSyncDB(CARDS_FILE)
+                        os.remove(CARDS_FILE .. ".sync")
                         cfg.sync_server = new_server
                         CardStorage.save_anki_settings(cfg)
                         if on_saved then on_saved(cfg) end
@@ -200,7 +217,14 @@ function CardSync.show_cloud_sync_dialog(cfg, on_saved)
                             timeout = 3,
                         })
                     end
-                    UIManager:show(sync_settings)
+                    if sync_service.onShowCloudStorageList then
+                        sync_service:onShowCloudStorageList(on_confirm)
+                    else
+                        local sync_settings = sync_service:new{}
+                        sync_settings.onClose = function(this) UIManager:close(this) end
+                        sync_settings.onConfirm = on_confirm
+                        UIManager:show(sync_settings)
+                    end
                 end,
             }},
             {{
@@ -211,7 +235,7 @@ function CardSync.show_cloud_sync_dialog(cfg, on_saved)
                         text = _("Remove cloud sync server?"),
                         ok_text = _("Remove"),
                         ok_callback = function()
-                            SyncService.removeLastSyncDB(CARDS_FILE)
+                            os.remove(CARDS_FILE .. ".sync")
                             cfg.sync_server = nil
                             CardStorage.save_anki_settings(cfg)
                             if on_saved then on_saved(cfg) end

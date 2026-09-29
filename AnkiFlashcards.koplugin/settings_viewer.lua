@@ -13,7 +13,7 @@ local CardSync       = require("card_sync")
 
 local SettingsViewer = {}
 
-function SettingsViewer.show(base_config, on_saved)
+function SettingsViewer.show(base_config, on_saved, ui)
     -- Work on a merged copy: start with top-level config keys (API keys,
     -- provider settings), then overlay the anki subtable, then saved
     -- on-device settings on top so they take priority.
@@ -468,7 +468,7 @@ function SettingsViewer.show(base_config, on_saved)
                            cfg = new_cfg
                            save()
                            show_sync()
-                       end)
+                       end, ui)
                    end }},
                 {{ text = _("Back"),
                    callback = function() UIManager:close(sub_dlg); show_main() end }},
