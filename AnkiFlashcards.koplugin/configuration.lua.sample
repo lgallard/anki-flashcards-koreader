@@ -3,16 +3,21 @@ local CONFIGURATION = {
     -- Get your key at: https://dashscope-intl.console.aliyun.com/
     dashscope_api_key = "YOUR_DASHSCOPE_API_KEY",
     provider          = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
-    model             = "qwen-plus",
+    model             = "qwen-plus",        -- text model
+    image_model       = "qwen-image-plus",  -- image model
 
     -- ── Gemini (Google) — alternative for text and image generation ──────
     -- Get your key at: https://aistudio.google.com/apikey
     -- Billing must be enabled for image generation.
-    gemini_api_key = "YOUR_GEMINI_API_KEY",
+    gemini_api_key     = "YOUR_GEMINI_API_KEY",
+    gemini_text_model  = "gemini-2.5-flash",
+    gemini_image_model = "gemini-2.5-flash-image",
 
     -- ── OpenAI — GPT-4o-mini for text, GPT Image / DALL-E for images ──────
     -- Get your key at: https://platform.openai.com/api-keys
-    openai_api_key = "YOUR_OPENAI_API_KEY",
+    openai_api_key     = "YOUR_OPENAI_API_KEY",
+    openai_model       = "gpt-4o-mini",
+    openai_image_model = "gpt-image-1",
 
     -- ── OpenRouter — access to hundreds of models via one API key ─────────
     -- Get your key at: https://openrouter.ai/keys

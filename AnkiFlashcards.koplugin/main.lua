@@ -35,17 +35,32 @@ do
     local saved_anki = CardStorage.load_anki_settings()
     if saved_anki then
         CONFIGURATION = CONFIGURATION or {}
+        -- Before #42, `model` stored the Anki note type. Move every legacy
+        -- value (including custom note types) out of the provider-model key.
+        -- Presence of `anki_model` is the format discriminator; note-type
+        -- names are user-defined and cannot be recognized from an allowlist.
+        if not saved_anki.anki_model and saved_anki.model and saved_anki.model ~= "" then
+            saved_anki.anki_model = saved_anki.model
+            saved_anki.model = nil
+        end
         CONFIGURATION.anki = saved_anki
         -- Promote plugin-level settings from saved anki settings to top level.
         for _, key in ipairs({
             "target_language",
             "text_provider",
             "image_provider",
+            "model",
+            "image_model",
+            "gemini_text_model",
+            "gemini_image_model",
+            "openai_model",
+            "openai_image_model",
             "dashscope_api_key",
             "gemini_api_key",
             "openai_api_key",
             "openrouter_api_key",
             "openrouter_model",
+            "openrouter_image_model",
             "elevenlabs_api_key",
             "ankivocab_api_key",
         }) do
@@ -114,7 +129,18 @@ local function get_anki_config()
     end
     local fresh = CardStorage.load_anki_settings()
     if fresh then
-        for k, v in pairs(fresh) do cfg[k] = v end
+        for k, v in pairs(fresh) do
+            if k == "anki_model" then
+                cfg.model = v
+            elseif k == "model" and not fresh.anki_model then
+                cfg.model = v
+            elseif k ~= "model" and k ~= "image_model"
+               and k ~= "gemini_text_model" and k ~= "gemini_image_model"
+               and k ~= "openai_model" and k ~= "openai_image_model"
+               and k ~= "openrouter_model" and k ~= "openrouter_image_model" then
+                cfg[k] = v
+            end
+        end
     end
     return cfg
 end
@@ -604,6 +630,7 @@ function AnkiFlashcards:init()
                 local ui = self.ui
                 self.ui.highlight:onClose()
                 CardManager.show_manage(CONFIGURATION, {
+                    ui = ui,
                     on_inbox = function()
                         HighlightInbox.show(ui, CONFIGURATION)
                     end,
@@ -851,7 +878,7 @@ function AnkiFlashcards:init()
     UIManager:scheduleIn(45, function()
         local cfg = get_anki_config()
         if cfg.sync_server and NetworkMgr:isOnline() then
-            CardSync.run_sync(cfg.sync_server, true)
+            CardSync.run_sync(cfg.sync_server, true, self.ui)
         end
     end)
 

@@ -98,7 +98,7 @@ function AnkiSync.send_card(config, card, tts_config)
         return nil, "Anki URL not configured"
     end
 
-    local model = config.model or "Vocabulary"
+    local model = config.anki_model or config.model or "Vocabulary"
 
     local fields = {
         ["Phrase"]     = card.phrase     or "",
