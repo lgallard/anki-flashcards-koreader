@@ -153,7 +153,13 @@ end
 function CardSync.run_sync(server, is_silent, ui)
     local sync_service = get_sync_service(ui)
     if not sync_service or not sync_service.sync then return false end
-    sync_service:sync(server, CARDS_FILE, CardSync.merge_cards, is_silent)
+    if ui and sync_service == ui.cloudstorage then
+        -- Cloud Storage plugin (2026.08+): Cloud:sync is an instance method.
+        sync_service:sync(server, CARDS_FILE, CardSync.merge_cards, is_silent)
+    else
+        -- Legacy SyncService module: SyncService.sync is a static function.
+        sync_service.sync(server, CARDS_FILE, CardSync.merge_cards, is_silent)
+    end
     return true
 end
 
