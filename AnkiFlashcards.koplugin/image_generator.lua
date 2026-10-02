@@ -23,6 +23,12 @@ local IMAGE_DIR = DataStorage:getDataDir() .. "/.anki_images"
 
 local ImageGenerator = {}
 
+-- Images are enabled by default to preserve existing configurations. The
+-- explicit false value is the text-only setting used by all callers.
+function ImageGenerator.images_enabled(config)
+    return not config or config.images_enabled ~= false
+end
+
 -- ── Shared helpers ──────────────────────────────────────────────────────────
 
 local function ensure_image_dir()
@@ -915,6 +921,10 @@ local PROVIDERS = {
 --- on_success(image_path) called when the PNG is saved locally.
 --- on_error(err_string) called on any failure; if nil, a Notification is shown.
 function ImageGenerator.generate_async(config, image_prompt, phrase, on_success, on_error)
+    -- Text-only cards must never schedule an image task, poll, or call a
+    -- provider. Keep this guard here as a final safety net for every caller.
+    if not ImageGenerator.images_enabled(config) then return end
+
     -- Default on_error: show a wrapping InfoMessage so long errors are readable on e-ink.
     if not on_error then
         local InfoMessage = require("ui/widget/infomessage")

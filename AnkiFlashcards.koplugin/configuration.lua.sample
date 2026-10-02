@@ -44,6 +44,8 @@ local CONFIGURATION = {
     --          "openrouter" (requires openrouter_api_key),
     --          "pollinations" (free, no API key, but unreliable)
     image_provider = "dashscope",
+    -- Set false for text-only cards. This skips image prompts and all image API calls.
+    images_enabled = true,
 
     -- ── ElevenLabs TTS (optional — generates audio for Anki cards) ─────────
     elevenlabs_api_key  = "YOUR_ELEVENLABS_API_KEY",

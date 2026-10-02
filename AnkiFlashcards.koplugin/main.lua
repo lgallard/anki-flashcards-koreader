@@ -49,6 +49,7 @@ do
             "target_language",
             "text_provider",
             "image_provider",
+            "images_enabled",
             "model",
             "image_model",
             "gemini_text_model",
@@ -64,7 +65,7 @@ do
             "elevenlabs_api_key",
             "ankivocab_api_key",
         }) do
-            if saved_anki[key] and saved_anki[key] ~= "" then
+            if saved_anki[key] ~= nil and saved_anki[key] ~= "" then
                 CONFIGURATION[key] = saved_anki[key]
             end
         end
@@ -169,6 +170,7 @@ end
 -- For ankivocab, only trigger if the card was actually created via AnkiVocab
 -- (_ankivocab_word is set), not just because the current provider is ankivocab.
 local function can_generate_image(card, img_cfg)
+    if not ImageGenerator.images_enabled(img_cfg) then return false end
     local has_prompt = card.image_prompt and card.image_prompt ~= ""
     local is_ankivocab_card = img_cfg.image_provider == "ankivocab"
                           and card._ankivocab_word and card._ankivocab_word ~= ""
@@ -466,9 +468,10 @@ function AnkiFlashcards:init()
                                     local nv = make_viewer(new_card, false)
                                     viewer_ref[1] = nv
                                     -- Kick off new image generation.
-                                    if new_card.image_prompt then
+                                    local new_img_config = make_image_config(new_card)
+                                    if can_generate_image(new_card, new_img_config) then
                                         ImageGenerator.generate_async(
-                                            CONFIGURATION,
+                                            new_img_config,
                                             new_card.image_prompt,
                                             new_card.phrase,
                                             function(img_path)
@@ -508,7 +511,7 @@ function AnkiFlashcards:init()
                                         c.image_prompt = new_prompt
                                         viewer_ref[1] = make_viewer(c, true)
                                         -- Kick off image generation with new prompt.
-                                        if new_prompt then
+                                        if new_prompt and ImageGenerator.images_enabled(CONFIGURATION) then
                                             ImageGenerator.generate_async(
                                                 CONFIGURATION,
                                                 new_prompt,
@@ -527,7 +530,7 @@ function AnkiFlashcards:init()
                                 end)
                             end,
 
-                            on_regen_image = function()
+                            on_regen_image = ImageGenerator.images_enabled(CONFIGURATION) and function()
                                 if not c.image_prompt or c.image_prompt == "" then
                                     UIManager:show(Notification:new {
                                         text    = _("No image prompt available"),
@@ -567,7 +570,7 @@ function AnkiFlashcards:init()
                                         })
                                     end
                                 )
-                            end,
+                            end or nil,
                         }
                         UIManager:show(v)
                         return v
@@ -705,7 +708,7 @@ function AnkiFlashcards:init()
                                 on_send = function()
                                     return AnkiSync.send_card(get_anki_config(), card, CONFIGURATION)
                                 end,
-                                on_regen_image = function()
+                                on_regen_image = ImageGenerator.images_enabled(CONFIGURATION) and function()
                                     if not card.image_prompt or card.image_prompt == "" then
                                         UIManager:show(Notification:new {
                                             text    = _("No image prompt available"),
@@ -743,7 +746,7 @@ function AnkiFlashcards:init()
                                             })
                                         end
                                     )
-                                end,
+                                end or nil,
                                 on_highlight_dialog = function()
                                     hl_self:showHighlightDialog(hl_index)
                                 end,
