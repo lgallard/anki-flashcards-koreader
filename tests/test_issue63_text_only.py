@@ -253,13 +253,16 @@ Plugin.ui = ui
 Plugin:init()
 
 local action = registrations["ankiflashcards_4"]({ selected_text = "Run", saveHighlight = function() end })
+local schedule_count = #TEST_STATE.schedules
 action.callback()
--- init queued auto-send and auto-sync first; normal generation is the third callback.
-TEST_STATE.schedules[3].callback()
+assert(#TEST_STATE.schedules == schedule_count + 1, "normal generation did not queue its callback")
+TEST_STATE.schedules[schedule_count + 1].callback()
 assert(TEST_STATE.image_calls == 0, "normal text-only generation launched image work")
 assert(viewer_options.on_regen_image == nil, "normal text-only viewer exposed image regeneration")
+schedule_count = #TEST_STATE.schedules
 viewer_options.on_regen_text()
-TEST_STATE.schedules[4].callback()
+assert(#TEST_STATE.schedules == schedule_count + 1, "sentence regeneration did not queue its callback")
+TEST_STATE.schedules[schedule_count + 1].callback()
 assert(TEST_STATE.image_calls == 0, "sentence regeneration launched image work in text-only mode")
 
 highlight:onTap(nil, { pos = { x = 1, y = 1 } })
