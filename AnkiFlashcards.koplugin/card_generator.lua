@@ -318,8 +318,8 @@ function CardGenerator.generate(config, phrase, context, title, author)
     return parse_response(raw_text)
 end
 
--- Regenerate only the example sentence and image prompt for a phrase.
--- Returns (text, image_prompt) or (nil, error_string).
+-- Regenerate only the example sentence and, when images are enabled, an image prompt.
+-- Text-only mode returns (text, nil); errors return (nil, error_string).
 function CardGenerator.generate_text(config, phrase)
     local lang = config.target_language or "English"
     local p = escape_for_prompt(phrase or "")
