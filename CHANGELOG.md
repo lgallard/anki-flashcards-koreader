@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/lgallard/anki-flashcards-koreader/compare/v1.0.0...v1.1.0) (2026-10-17)
+
+
+### Features
+
+* add text-only card mode ([ec8b155](https://github.com/lgallard/anki-flashcards-koreader/commit/ec8b15534e1c9d30afc1e8113e594fa2fad48bc8))
+* add text-only card mode ([241b241](https://github.com/lgallard/anki-flashcards-koreader/commit/241b241a467cf8d5e27a8a3068153a22a37b8dd8))
+
 ## 1.0.0 (2026-09-30)
 
 
