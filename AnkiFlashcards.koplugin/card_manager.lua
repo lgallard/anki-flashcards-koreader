@@ -120,12 +120,14 @@ end
 
 -- ── Card export ─────────────────────────────────────────────────────────────
 
-local function cards_for_book(cards, book_title)
+local MISSING_BOOK = {}
+
+local function cards_for_book(cards, book_key)
     local filtered = {}
-    local is_unknown_book = book_title == _("Unknown book")
+    local is_missing_book = book_key == MISSING_BOOK
     for _, card in ipairs(cards) do
-        if card.book_title == book_title
-           or (is_unknown_book and (not card.book_title or card.book_title == "")) then
+        if (is_missing_book and (not card.book_title or card.book_title == ""))
+           or (not is_missing_book and card.book_title == book_key) then
             table.insert(filtered, card)
         end
     end
@@ -214,23 +216,31 @@ local function show_export_scope(opts)
     table.insert(buttons, {{ text = _("Choose Book"), callback = function()
         close_scope_dialog()
         local books, seen = {}, {}
-        for i, card in ipairs(all_cards) do
-            local title = (card.book_title and card.book_title ~= "")
-                          and card.book_title or _("Unknown book")
-            if not seen[title] then
-                seen[title] = true
-                table.insert(books, title)
+        for index, card in ipairs(all_cards) do
+            local book_key = (card.book_title and card.book_title ~= "")
+                             and card.book_title or MISSING_BOOK
+            if not seen[book_key] then
+                seen[book_key] = true
+                table.insert(books, {
+                    key = book_key,
+                    label = book_key == MISSING_BOOK and _("Unknown book") or book_key,
+                })
             end
         end
-        table.sort(books)
+        table.sort(books, function(left, right)
+            if left.label == right.label then
+                return left.key == MISSING_BOOK and right.key ~= MISSING_BOOK
+            end
+            return left.label < right.label
+        end)
 
         local book_dialog
         local book_buttons = {}
-        for _, title in ipairs(books) do
-            local selected_title = title
-            table.insert(book_buttons, {{ text = selected_title, callback = function()
+        for _, book in ipairs(books) do
+            local selected_book = book
+            table.insert(book_buttons, {{ text = selected_book.label, callback = function()
                 UIManager:close(book_dialog)
-                choose_cards(cards_for_book(all_cards, selected_title))
+                choose_cards(cards_for_book(all_cards, selected_book.key))
             end }})
         end
         table.insert(book_buttons, {{ text = _("Cancel"), callback = function()

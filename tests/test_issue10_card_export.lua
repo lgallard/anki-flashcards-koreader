@@ -191,20 +191,36 @@ assert(ui_state.exports[2].format == "tsv" and #ui_state.exports[2].cards == 1
        and ui_state.exports[2].cards[1].phrase == "two",
        "book-filtered TSV export did not reach CardStorage")
 
-ui_state.cards = {{ phrase = "unknown", book_title = "" }}
-scope = export_menu()
-scope.buttons[3][1].callback() -- Choose Book
-book_picker = ui_state.shown[#ui_state.shown]
-book_picker.buttons[1][1].callback() -- Unknown book
-format = ui_state.shown[#ui_state.shown]
-format.buttons[1][1].callback()
-assert(#ui_state.exports[3].cards == 1 and ui_state.exports[3].cards[1].phrase == "unknown",
-       "Unknown book selection must export cards without a book title")
+ui_state.cards = {
+    { phrase = "titled unknown", book_title = "Unknown book" },
+    { phrase = "untitled", book_title = "" },
+}
+local collision_exports = {}
+for button_index = 1, 2 do
+    scope = export_menu()
+    scope.buttons[3][1].callback() -- Choose Book
+    book_picker = ui_state.shown[#ui_state.shown]
+    assert(book_picker.buttons[button_index][1].text == "Unknown book",
+           "real and missing books must retain the Unknown book display label")
+    book_picker.buttons[button_index][1].callback()
+    format = ui_state.shown[#ui_state.shown]
+    format.buttons[1][1].callback()
+    collision_exports[button_index] = ui_state.exports[#ui_state.exports].cards
+end
+assert(#collision_exports[1] == 1 and #collision_exports[2] == 1
+       and collision_exports[1][1].phrase ~= collision_exports[2][1].phrase,
+       "real Unknown book and no-book selections must export separately")
+local collision_phrases = {
+    [collision_exports[1][1].phrase] = true,
+    [collision_exports[2][1].phrase] = true,
+}
+assert(collision_phrases["titled unknown"] and collision_phrases["untitled"],
+       "Choose Book must export both real Unknown book and no-book cards independently")
 
 ui_state.cards = {}
 local shown_before = #ui_state.shown
 export_menu()
-assert(#ui_state.exports == 3 and #ui_state.shown == shown_before + 2
+assert(#ui_state.exports == 4 and #ui_state.shown == shown_before + 2
        and ui_state.shown[#ui_state.shown].text == "No cards to export",
        "zero-card export must notify without creating an export")
 
