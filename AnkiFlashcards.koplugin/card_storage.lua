@@ -113,6 +113,12 @@ end
 
 local function escape_export_cell(value, delimiter)
     value = tostring(value or "")
+    -- Spreadsheet applications may evaluate cells that begin with formula
+    -- markers, including after leading whitespace. Prefix an apostrophe so the
+    -- original value is imported as literal text.
+    if value:match("^%s*[=+%-@]") then
+        value = "'" .. value
+    end
     if value:find('"', 1, true)
        or value:find(delimiter, 1, true)
        or value:find("\r", 1, true)
@@ -164,17 +170,18 @@ function CardStorage.export_cards(cards, format)
         return nil, 0, "write_failed"
     end
     for _, card in ipairs(cards) do
+        card = card or {}
         local row = {
-            card.phrase,
-            card.ipa,
-            card.definition,
-            card.synonyms,
-            card.text,
-            card.source,
-            image_filename(card.image_path),
+            tostring(card.phrase or ""),
+            tostring(card.ipa or ""),
+            tostring(card.definition or ""),
+            tostring(card.synonyms or ""),
+            tostring(card.text or ""),
+            tostring(card.source or ""),
+            tostring(image_filename(card.image_path) or ""),
         }
-        for i, value in ipairs(row) do
-            row[i] = escape_export_cell(value, delimiter)
+        for i = 1, #row do
+            row[i] = escape_export_cell(row[i], delimiter)
         end
         if not file:write(table.concat(row, delimiter), "\r\n") then
             file:close()

@@ -36,6 +36,34 @@ assert(csv:find('"/haɪ/\r\nsecond line"', 1, true), "CSV CR/LF escaping failed"
 assert(csv:find('"hello, greeting"', 1, true), "CSV delimiter escaping failed")
 assert(csv:find('"image,one.png"', 1, true), "image filename should be exported without its path")
 
+local csv_formula_cards = {
+    {
+        phrase = "=SUM(A1:A2)",
+        ipa = "+ipa",
+        definition = "-definition",
+        synonyms = "@synonyms",
+        text = " \t=leading whitespace formula",
+        source = "+source",
+        image_path = "/images/@image.png",
+    },
+}
+local csv_formula_path = assert(CardStorage.export_cards(csv_formula_cards, "csv"))
+local csv_formula_file = assert(io.open(csv_formula_path, "r"))
+local csv_formula = csv_formula_file:read("*all")
+csv_formula_file:close()
+os.remove(csv_formula_path)
+assert(csv_formula:find("'=SUM(A1:A2),'+ipa,'-definition,'@synonyms,' \t=leading whitespace formula,'+source,'@image.png", 1, true),
+       "CSV formula-like fields must be neutralized without changing their content")
+
+local partial_csv_path, partial_csv_count = assert(CardStorage.export_cards({ { phrase = "partial" } }, "csv"))
+assert(partial_csv_count == 1, "partial cards should still be counted")
+local partial_csv_file = assert(io.open(partial_csv_path, "r"))
+local partial_csv = partial_csv_file:read("*all")
+partial_csv_file:close()
+os.remove(partial_csv_path)
+assert(partial_csv:find("partial,,,,,,\r\n", 1, true),
+       "partial cards must export missing fields as blank cells")
+
 local tsv_cards = {
     {
         phrase = "tab\tphrase",
@@ -59,12 +87,46 @@ assert(tsv:find('"tab\tphrase"', 1, true), "TSV delimiter escaping failed")
 assert(tsv:find('"source\rline"', 1, true), "TSV CR escaping failed")
 assert(tsv:find("plain.png", 1, true), "Windows image filename should be exported without its path")
 
+local tsv_formula_cards = {
+    {
+        phrase = "=SUM(A1:A2)",
+        ipa = "+ipa",
+        definition = "-definition",
+        synonyms = "@synonyms",
+        text = " \t=leading whitespace formula",
+        source = "+source",
+        image_path = "/images/@image.png",
+    },
+}
+local tsv_formula_path = assert(CardStorage.export_cards(tsv_formula_cards, "tsv"))
+local tsv_formula_file = assert(io.open(tsv_formula_path, "r"))
+local tsv_formula = tsv_formula_file:read("*all")
+tsv_formula_file:close()
+os.remove(tsv_formula_path)
+assert(tsv_formula:find("'=SUM(A1:A2)\t'+ipa\t'-definition\t'@synonyms\t\"' \t=leading whitespace formula\"\t'+source\t'@image.png", 1, true),
+       "TSV formula-like fields must be neutralized without changing their content")
+
 local path, count, err = CardStorage.export_cards({}, "csv")
 assert(path == nil and count == 0 and err == "no_cards", "empty exports must not create a file")
 path, count, err = CardStorage.export_cards(csv_cards, "json")
 assert(path == nil and count == 0 and err == "unsupported_format", "invalid format must fail safely")
 
 local original_open, original_remove, original_rename = io.open, os.remove, os.rename
+local removed = {}
+io.open = function(file_path, mode)
+    if mode == "w" then return nil, "permission denied" end
+    return original_open(file_path, mode)
+end
+os.remove = function(file_path)
+    removed[#removed + 1] = file_path
+    return true
+end
+local failed_path, failed_count, failed_err = CardStorage.export_cards(csv_cards, "csv")
+assert(failed_path == nil and failed_count == 0 and failed_err == "write_failed",
+       "open failure must fail safely")
+assert(#removed == 0, "open failure must not attempt to remove a file that was never created")
+io.open, os.remove = original_open, original_remove
+
 local function assert_export_failure(fake_file, message)
     local removed, renamed = {}, {}
     io.open = function(file_path, mode)
@@ -100,6 +162,28 @@ assert_export_failure({
     write = function() return true end,
     close = function() return nil, "flush failed" end,
 }, "close failure must fail safely")
+
+local rename_removed = {}
+io.open = function(file_path, mode)
+    if mode == "w" then
+        return {
+            write = function() return true end,
+            close = function() return true end,
+        }
+    end
+    return original_open(file_path, mode)
+end
+os.rename = function() return nil, "rename failed" end
+os.remove = function(file_path)
+    rename_removed[#rename_removed + 1] = file_path
+    return true
+end
+failed_path, failed_count, failed_err = CardStorage.export_cards(csv_cards, "csv")
+assert(failed_path == nil and failed_count == 0 and failed_err == "write_failed",
+       "rename failure must fail safely")
+assert(#rename_removed == 1 and rename_removed[1] == "/tmp/anki_flashcards_export_20261017-120000.csv.tmp",
+       "rename failure must remove the temporary file")
+io.open, os.remove, os.rename = original_open, original_remove, original_rename
 
 os.date = original_date
 
