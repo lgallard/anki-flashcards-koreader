@@ -63,6 +63,44 @@ local path, count, err = CardStorage.export_cards({}, "csv")
 assert(path == nil and count == 0 and err == "no_cards", "empty exports must not create a file")
 path, count, err = CardStorage.export_cards(csv_cards, "json")
 assert(path == nil and count == 0 and err == "unsupported_format", "invalid format must fail safely")
+
+local original_open, original_remove, original_rename = io.open, os.remove, os.rename
+local function assert_export_failure(fake_file, message)
+    local removed, renamed = {}, {}
+    io.open = function(file_path, mode)
+        if mode == "w" then return fake_file end
+        return original_open(file_path, mode)
+    end
+    os.remove = function(file_path)
+        removed[#removed + 1] = file_path
+        return true
+    end
+    os.rename = function(from_path, to_path)
+        renamed[#renamed + 1] = { from_path, to_path }
+        return true
+    end
+
+    local failed_path, failed_count, failed_err = CardStorage.export_cards(csv_cards, "csv")
+    assert(failed_path == nil and failed_count == 0 and failed_err == "write_failed", message)
+    assert(#removed == 1 and removed[1] == "/tmp/anki_flashcards_export_20261017-120000.csv.tmp",
+           message .. ": temporary file must be removed")
+    assert(#renamed == 0, message .. ": temporary file must not be renamed")
+
+    io.open, os.remove, os.rename = original_open, original_remove, original_rename
+end
+
+local failed_write_close_calls = 0
+assert_export_failure({
+    write = function() return nil, "disk full" end,
+    close = function() failed_write_close_calls = failed_write_close_calls + 1; return true end,
+}, "write failure must fail safely")
+assert(failed_write_close_calls == 1, "write failure must close the temporary file")
+
+assert_export_failure({
+    write = function() return true end,
+    close = function() return nil, "flush failed" end,
+}, "close failure must fail safely")
+
 os.date = original_date
 
 print("issue #10 CardStorage export harness: PASS")

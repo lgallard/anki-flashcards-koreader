@@ -158,7 +158,11 @@ function CardStorage.export_cards(cards, format)
     if not file then return nil, 0, "write_failed" end
 
     local fields = { "Phrase", "IPA", "Definition", "Synonyms", "Text", "Source", "Image" }
-    file:write(table.concat(fields, delimiter), "\r\n")
+    if not file:write(table.concat(fields, delimiter), "\r\n") then
+        file:close()
+        os.remove(temp_path)
+        return nil, 0, "write_failed"
+    end
     for _, card in ipairs(cards) do
         local row = {
             card.phrase,
@@ -172,9 +176,16 @@ function CardStorage.export_cards(cards, format)
         for i, value in ipairs(row) do
             row[i] = escape_export_cell(value, delimiter)
         end
-        file:write(table.concat(row, delimiter), "\r\n")
+        if not file:write(table.concat(row, delimiter), "\r\n") then
+            file:close()
+            os.remove(temp_path)
+            return nil, 0, "write_failed"
+        end
     end
-    file:close()
+    if not file:close() then
+        os.remove(temp_path)
+        return nil, 0, "write_failed"
+    end
 
     if not os.rename(temp_path, path) then
         os.remove(temp_path)
