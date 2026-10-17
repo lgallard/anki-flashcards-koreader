@@ -121,7 +121,7 @@ local function show_menu(ui, config, highlights, already_carded, selected)
                         card.book_author = author
                         CardStorage.save_card(card)
                         done = done + 1
-                        if card.image_prompt then
+                        if card.image_prompt and ImageGenerator.images_enabled(config) then
                             ImageGenerator.generate_async(
                                 config, card.image_prompt, card.phrase,
                                 function(img_path)

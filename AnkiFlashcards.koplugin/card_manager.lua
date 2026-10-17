@@ -136,6 +136,7 @@ function CardManager.show_manage(base_config, opts)
                         "target_language",
                         "text_provider",
                         "image_provider",
+                        "images_enabled",
                         "model",
                         "image_model",
                         "gemini_text_model",
@@ -153,7 +154,7 @@ function CardManager.show_manage(base_config, opts)
                         -- The plugin can run without a local configuration.lua.
                         -- On-device settings are already persisted by SettingsViewer,
                         -- so only mirror them when a base config table is available.
-                        if base_config and new_cfg[key] then
+                        if base_config and new_cfg[key] ~= nil then
                             base_config[key] = new_cfg[key]
                         end
                     end
@@ -350,7 +351,7 @@ function CardManager.show(base_config, filter_book, ui)
                                 CardStorage.update_card(card_ref.phrase, card)
                                 viewer_ref[1] = make_viewer(true)
                                 -- Kick off image generation with new prompt.
-                                if new_prompt then
+                                if new_prompt and ImageGenerator.images_enabled(base_config) then
                                     ImageGenerator.generate_async(
                                         base_config,
                                         new_prompt,
@@ -368,7 +369,7 @@ function CardManager.show(base_config, filter_book, ui)
                             end)
                         end)
                     end,
-                    on_regen_image = function()
+                    on_regen_image = ImageGenerator.images_enabled(base_config) and function()
                         if not card.image_prompt or card.image_prompt == "" then
                             notify(_("No image prompt available"))
                             return
@@ -395,7 +396,7 @@ function CardManager.show(base_config, filter_book, ui)
                                 notify_error(_("Image regen failed: ") .. (err or "unknown"))
                             end
                         )
-                    end,
+                    end or nil,
                     on_regen_ipa = function(new_phrase, updated_card, new_viewer)
                         NetworkMgr:runWhenOnline(function()
                             UIManager:scheduleIn(0.05, function()
@@ -435,6 +436,7 @@ function CardManager.show(base_config, filter_book, ui)
                                   or is_ankivocab_card
             if (not card.image_path or card.image_path == "")
                and has_image_source
+               and ImageGenerator.images_enabled(img_cfg)
                and NetworkMgr:isOnline() then
                 ImageGenerator.generate_async(
                     img_cfg,

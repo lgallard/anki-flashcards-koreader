@@ -135,6 +135,18 @@ Generate a card for the highlighted phrase ONLY. Return valid JSON, no other tex
   "image_prompt": "<vivid scene from the sentence, anime-style, widescreen 16:9, no text>"
 }]]
 
+local TEXT_ONLY_PROMPT_TEMPLATE = [[{language} flashcard for "{phrase}" from "{title}" by "{author}".
+Context (for meaning only, do NOT use its words): "...{context}..."
+
+Generate a card for the highlighted phrase ONLY. Return valid JSON, no other text:
+{
+  "phrase": "<highlighted text in lowercase base/infinitive form, e.g. 'cranked up' → 'crank up'; use generic pronouns; never substitute a context word>",
+  "ipa": "<IPA for European langs, pinyin for Mandarin, romaji for Japanese, or standard {language} notation>",
+  "definition": "<context-aware, simple {language} words, max 20 words>",
+  "synonyms": "<up to 3 common {language} synonyms, comma-separated>",
+  "text": "<{language} sentence, max 15 words, simple grammar; phrase is the only hard word; fresh scenario unrelated to the book; conjugate naturally; wrap with {{c1::...}} as it appears in the sentence, not the canonical form>"
+}]]
+
 -- Sentence-only regeneration prompt: returns text (cloze) + image_prompt.
 local TEXT_REGEN_PROMPT = [[{language} flashcard. Phrase: "{phrase}"
 
@@ -142,6 +154,13 @@ Return valid JSON, no other text:
 {
   "text": "<{language} sentence, max 15 words, simple grammar; phrase is the only hard word; fresh scenario; conjugate naturally; wrap with {{c1::...}} as it appears in the sentence, not the canonical form>",
   "image_prompt": "<vivid scene from the sentence, anime-style, widescreen 16:9, no text>"
+}]]
+
+local TEXT_ONLY_REGEN_PROMPT = [[{language} flashcard. Phrase: "{phrase}"
+
+Return valid JSON, no other text:
+{
+  "text": "<{language} sentence, max 15 words, simple grammar; phrase is the only hard word; fresh scenario; conjugate naturally; wrap with {{c1::...}} as it appears in the sentence, not the canonical form>"
 }]]
 
 -- ── Helpers ───────────────────────────────────────────────────────────────
@@ -197,7 +216,8 @@ local function generate_ankivocab(config, phrase, context, title, author)
     }
     local target_lang = lang_codes[lang:lower()] or "en"
 
-    local include_image = config.image_provider == "ankivocab"
+    local include_image = config.images_enabled ~= false
+                       and config.image_provider == "ankivocab"
     -- Always request audio from AnkiVocab so it's available in the .apkg
     -- export, even though the Kobo won't download the MP3 locally.
     local include_audio = true
@@ -250,15 +270,17 @@ local function generate_ankivocab(config, phrase, context, title, author)
         definition   = data.definition or "",
         synonyms     = data.synonyms or "",
         text         = data.text_cloze or "",
-        image_prompt = data.image_prompt or "",
         source       = data.source or "",
-        -- Media URLs for later download by image/audio generators.
-        _image_url    = data.image_url,
+        -- Media URLs for later download by audio generators.
         _audio_url    = data.audio_url,
         _audio_status = data.audio_status,
         -- Original word sent to the API (for image polling lookups).
         _ankivocab_word = phrase,
     }
+    if include_image then
+        card.image_prompt = data.image_prompt or ""
+        card._image_url = data.image_url
+    end
 
     return card
 end
@@ -282,7 +304,9 @@ function CardGenerator.generate(config, phrase, context, title, author)
     local a = escape_for_prompt(author  or "Unknown")
     local p = escape_for_prompt(phrase  or "")
     local c = escape_for_prompt(context or "")
-    local prompt = PROMPT_TEMPLATE
+    local prompt_template = config.images_enabled == false
+                        and TEXT_ONLY_PROMPT_TEMPLATE or PROMPT_TEMPLATE
+    local prompt = prompt_template
         :gsub("{language}", function() return lang end)
         :gsub("{title}",    function() return t end)
         :gsub("{author}",   function() return a end)
@@ -294,12 +318,14 @@ function CardGenerator.generate(config, phrase, context, title, author)
     return parse_response(raw_text)
 end
 
--- Regenerate only the example sentence and image prompt for a phrase.
--- Returns (text, image_prompt) or (nil, error_string).
+-- Regenerate only the example sentence and, when images are enabled, an image prompt.
+-- Text-only mode returns (text, nil); errors return (nil, error_string).
 function CardGenerator.generate_text(config, phrase)
     local lang = config.target_language or "English"
     local p = escape_for_prompt(phrase or "")
-    local prompt = TEXT_REGEN_PROMPT
+    local prompt_template = config.images_enabled == false
+                        and TEXT_ONLY_REGEN_PROMPT or TEXT_REGEN_PROMPT
+    local prompt = prompt_template
         :gsub("{language}", function() return lang end)
         :gsub("{phrase}",   function() return p end)
 

@@ -259,12 +259,23 @@ function SettingsViewer.show(base_config, on_saved, ui)
             show_ai_providers()
         end
 
+        local images_enabled = cfg.images_enabled ~= false
         local buttons = {
             {{ text = _("Text: ") .. (cfg.text_provider or "dashscope"),
                callback = function() cycle("text_provider", TEXT_PROVIDERS) end }},
-            {{ text = _("Image: ") .. (cfg.image_provider or "dashscope"),
-               callback = function() cycle("image_provider", IMAGE_PROVIDERS) end }},
+            {{ text = images_enabled and _("Images: ON") or _("Images: OFF (text-only)"),
+               callback = function()
+                   cfg.images_enabled = not images_enabled
+                   save()
+                   UIManager:close(sub_dlg)
+                   show_ai_providers()
+               end }},
         }
+
+        if images_enabled then
+            table.insert(buttons, {{ text = _("Image: ") .. (cfg.image_provider or "dashscope"),
+               callback = function() cycle("image_provider", IMAGE_PROVIDERS) end }})
+        end
 
         local text_model = TEXT_MODEL_FIELDS[cfg.text_provider or "dashscope"]
         if text_model then
@@ -278,7 +289,7 @@ function SettingsViewer.show(base_config, on_saved, ui)
             }})
         end
 
-        local image_model = IMAGE_MODEL_FIELDS[cfg.image_provider or "dashscope"]
+        local image_model = images_enabled and IMAGE_MODEL_FIELDS[cfg.image_provider or "dashscope"]
         if image_model then
             table.insert(buttons, {{
                 text = _(image_model.label .. ": ") .. short(image_model.key, 42),
@@ -482,7 +493,8 @@ function SettingsViewer.show(base_config, on_saved, ui)
     show_main = function()
         local cur_lang  = cfg.target_language or "English"
         local cur_text  = cfg.text_provider   or "dashscope"
-        local cur_image = cfg.image_provider  or "dashscope"
+        local cur_image = cfg.images_enabled == false and _("text-only")
+                                               or (cfg.image_provider or "dashscope")
 
         local dlg
         dlg = ButtonDialog:new {
