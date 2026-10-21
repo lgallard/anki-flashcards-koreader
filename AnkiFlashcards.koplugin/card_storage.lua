@@ -62,6 +62,16 @@ local function load_raw()
     return {}
 end
 
+-- Remove an image only when no persisted card still points at it. This makes
+-- cleanup safe even if legacy data or a provider accidentally reuses a path.
+function CardStorage.remove_image_if_unreferenced(path)
+    if not path or path == "" then return false end
+    for _, entry in ipairs(load_raw()) do
+        if entry.image_path == path then return false end
+    end
+    return os.remove(path)
+end
+
 local function save_raw(entries)
     local ok, encoded = pcall(json.encode, entries)
     if not ok then return false end
@@ -127,6 +137,16 @@ local function find_entry(entries, target)
         end
     end
     return nil
+end
+
+local function has_other_normalized_phrase(entries, entry, phrase)
+    local key = normalize(phrase)
+    for _, other in ipairs(entries) do
+        if other ~= entry and normalize(other.phrase) == key then
+            return true
+        end
+    end
+    return false
 end
 
 -- Records written before stable identities were introduced are safe for
@@ -324,7 +344,12 @@ function CardStorage.update_card(target, new_card)
     local entries = load_raw()
     local e = find_entry(entries, target)
     if e then
-        if not ensure_entry_identity(entries, e, target) then return false end
+        -- Editing a card may change its phrase, but must not create a second
+        -- record with the same normalized phrase.
+        if has_other_normalized_phrase(entries, e, new_card.phrase) then
+            return false, "already_saved"
+        end
+        if not ensure_entry_identity(entries, e, target) then return false, "write_failed" end
         e.phrase       = new_card.phrase       or ""
         e.ipa          = new_card.ipa          or ""
         e.definition   = new_card.definition   or ""
@@ -333,12 +358,12 @@ function CardStorage.update_card(target, new_card)
         e.source       = new_card.source       or ""
         e.image_prompt = new_card.image_prompt or e.image_prompt or ""
         e.updated_at   = os.time()
-        if not save_raw(entries) then return false end
+        if not save_raw(entries) then return false, "write_failed" end
         new_card._storage_id = e._storage_id
         new_card.sent_to_anki = e.sent_to_anki
         return true
     end
-    return false
+    return false, "not_saved"
 end
 
 -- Replace a saved card after a full regeneration. The replacement deliberately
@@ -348,6 +373,11 @@ function CardStorage.replace_card(target, new_card)
     local entries = load_raw()
     local e = find_entry(entries, target)
     if not e then return false, "not_saved" end
+    -- Check before changing identity or fields so a rejected regeneration
+    -- leaves the saved card exactly as it was.
+    if has_other_normalized_phrase(entries, e, new_card.phrase) then
+        return false, "already_saved"
+    end
     if not ensure_entry_identity(entries, e, target) then return false, "write_failed" end
 
     local sent_to_anki = e.sent_to_anki
@@ -377,7 +407,7 @@ function CardStorage.replace_card(target, new_card)
     -- Persistence comes first. A failed asset cleanup must not roll back or
     -- reintroduce a stale record; at worst it leaves an obsolete file.
     if old_image_path and old_image_path ~= "" and old_image_path ~= e.image_path then
-        os.remove(old_image_path)
+        CardStorage.remove_image_if_unreferenced(old_image_path)
     end
     return true
 end
@@ -393,7 +423,7 @@ function CardStorage.delete_card(idx)
     if not save_raw(entries) then return false, "write_failed" end
 
     if card.image_path and card.image_path ~= "" then
-        os.remove(card.image_path)
+        CardStorage.remove_image_if_unreferenced(card.image_path)
     end
     return true
 end
@@ -418,7 +448,7 @@ function CardStorage.clear_all()
 
     for _, card in ipairs(entries) do
         if card.image_path and card.image_path ~= "" then
-            os.remove(card.image_path)
+            CardStorage.remove_image_if_unreferenced(card.image_path)
         end
     end
     return true

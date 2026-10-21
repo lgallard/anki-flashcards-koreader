@@ -48,15 +48,15 @@ local function begin_image_request(config, card, session, after_success, on_erro
     ImageGenerator.generate_async(config, card.image_prompt, card.phrase, function(image_path)
         if not session.open or session.image_version ~= version
            or card._storage_id ~= storage_id then
-            os.remove(image_path)
+            CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
         if not CardStorage.update_image_path(card, image_path) then
-            os.remove(image_path)
+            CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
         if not session.open or session.image_version ~= version then
-            os.remove(image_path)
+            CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
         card.image_path = image_path
@@ -490,7 +490,6 @@ function CardManager.show(base_config, filter_book, ui)
     end
 
     for i, card in ipairs(cards) do
-        local idx    = i
         local prefix = card.sent_to_anki and "+ " or ""
         local book   = (card.book_title and card.book_title ~= "")
                        and card.book_title or _("Unknown book")
@@ -574,7 +573,7 @@ function CardManager.show(base_config, filter_book, ui)
                         local old_image = card.image_path
                         notify(_("Regenerating image…"))
                         begin_image_request(base_config, card, session, function()
-                                if old_image and old_image ~= "" then os.remove(old_image) end
+                                if old_image and old_image ~= "" then CardStorage.remove_image_if_unreferenced(old_image) end
                                 UIManager:setDirty(nil, "full")
                                 notify(_("New image loaded!"))
                             end, function(err)

@@ -190,17 +190,17 @@ local function begin_image_request(config, card, session, after_success, on_erro
     ImageGenerator.generate_async(config, card.image_prompt, card.phrase, function(image_path)
         if not session.open or session.image_version ~= version
            or card._storage_id ~= storage_id then
-            os.remove(image_path)
+            CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
         if not CardStorage.update_image_path(card, image_path) then
-            os.remove(image_path)
+            CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
         -- on_close cannot interleave within this callback, but keep this guard
         -- explicit for future asynchronous storage implementations.
         if not session.open or session.image_version ~= version then
-            os.remove(image_path)
+            CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
         card.image_path = image_path
@@ -543,7 +543,9 @@ function AnkiFlashcards:init()
                                     local replaced, replace_err = CardStorage.replace_card(c, new_card)
                                     if not replaced then
                                         UIManager:show(InfoMessage:new {
-                                            text    = _("Could not replace generated card: ") .. (replace_err or "unknown"),
+                                            text = replace_err == "already_saved"
+                                                and _("A card with this phrase is already saved")
+                                                or _("Could not replace generated card: ") .. (replace_err or "unknown"),
                                             timeout = 5,
                                         })
                                         session.viewer = make_viewer(c, previous_show_back)
@@ -618,7 +620,7 @@ function AnkiFlashcards:init()
                                 begin_image_request(CONFIGURATION, c, session, function()
                                             -- Clean up old image only after the replacement persisted.
                                             if old_image and old_image ~= "" then
-                                                os.remove(old_image)
+                                                CardStorage.remove_image_if_unreferenced(old_image)
                                             end
                                             UIManager:setDirty(nil, "full")
                                             UIManager:show(Notification:new {
@@ -760,7 +762,7 @@ function AnkiFlashcards:init()
                                     })
                                     begin_image_request(CONFIGURATION, card, session, function()
                                                 if old_image and old_image ~= "" then
-                                                    os.remove(old_image)
+                                                    CardStorage.remove_image_if_unreferenced(old_image)
                                                 end
                                                 UIManager:show(Notification:new {
                                                     text    = _("New image loaded!"),

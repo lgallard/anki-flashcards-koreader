@@ -478,11 +478,18 @@ function CardViewer:editField(field_def)
                             self.card.source = "https://dictionary.cambridge.org/dictionary/english/" .. slug
                             self.card.ipa    = ""
                         end
-                        if self.on_update and not self.on_update(self.card) then
+                        local updated, update_err = true, nil
+                        if self.on_update then
+                            updated, update_err = self.on_update(self.card)
+                        end
+                        if not updated then
                             for k in pairs(self.card) do self.card[k] = nil end
                             for k, v in pairs(before) do self.card[k] = v end
                             UIManager:show(InfoMessage:new {
-                                text = _("Could not save card changes"), timeout = 5,
+                                text = update_err == "already_saved"
+                                    and _("A card with this phrase is already saved")
+                                    or _("Could not save card changes"),
+                                timeout = 5,
                             })
                             return
                         end

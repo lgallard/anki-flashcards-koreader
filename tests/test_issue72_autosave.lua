@@ -47,6 +47,100 @@ assert(CardStorage.update_image_path(regenerated, "/tmp/current.png"), "current 
 assert(CardStorage.load_cards()[1].image_path == "/tmp/current.png", "current async image was not persisted")
 os.remove("/tmp/anki_flashcards.json")
 
+-- The normalized phrase uniqueness invariant applies to edits and full
+-- regenerations as well as initial saves. Rejections preserve both records and
+-- their sent state, so later sends still target the intended card.
+local alpha = { phrase = "alpha", definition = "first" }
+local beta = { phrase = "beta", definition = "second" }
+assert(CardStorage.save_card(alpha) and CardStorage.save_card(beta), "setup cards must save")
+assert(CardStorage.mark_sent("alpha"), "alpha sent state must persist")
+local edit = copy_card(alpha)
+edit.phrase = "  BETA  "
+local updated, update_err = CardStorage.update_card(alpha, edit)
+assert(not updated and update_err == "already_saved", "edit collision must be rejected")
+local replacement = { phrase = "beta", definition = "replacement" }
+local replaced, replace_err = CardStorage.replace_card(alpha, replacement)
+assert(not replaced and replace_err == "already_saved", "regeneration collision must be rejected")
+cards = CardStorage.load_cards()
+assert(#cards == 2 and cards[1].phrase == "alpha" and cards[1].sent_to_anki
+       and cards[2].phrase == "beta" and not cards[2].sent_to_anki,
+       "rejected phrase collisions must not mutate records or sent-state targeting")
+os.remove("/tmp/anki_flashcards.json")
+
+-- Same-phrase requests started in one mocked second get distinct media paths.
+-- Complete the second request first, persist it, then clean the stale first
+-- result: the current asset must remain intact.
+do
+    local saved_time = os.time
+    local scheduled, completed = {}, {}
+    local saved_json = package.loaded.json
+    package.loaded["image_generator"] = nil
+    package.loaded["ssl.https"] = nil
+    package.loaded["socket.http"] = nil
+    package.loaded["ltn12"] = nil
+    package.loaded["mime"] = nil
+    package.loaded.json = nil
+    os.time = function() return 1700000000 end
+    package.preload["ssl.https"] = function()
+        return {
+            request = function(request)
+                if request.url:find("/services/", 1, true) then
+                    request.sink("create")
+                elseif request.url:find("/tasks/", 1, true) then
+                    request.sink("complete")
+                else
+                    request.sink("image bytes")
+                end
+                return 1, 200
+            end,
+        }
+    end
+    package.preload["socket.http"] = package.preload["ssl.https"]
+    package.preload["ltn12"] = function()
+        return {
+            sink = { table = function(parts)
+                return function(chunk) if chunk then table.insert(parts, chunk) end return 1 end
+            end },
+            source = { string = function(body) return body end },
+        }
+    end
+    package.preload["mime"] = function() return { unb64 = function(value) return value end } end
+    package.preload["json"] = function()
+        return { decode = function(value)
+            if value == "create" then return { output = { task_id = "task" } } end
+            return { output = { task_status = "SUCCEEDED", results = {{ url = "https://image.test/result" }} } }
+        end, encode = function() return "{}" end }
+    end
+    package.preload["ui/uimanager"] = function()
+        return { scheduleIn = function(_, _, callback) table.insert(scheduled, callback) end }
+    end
+    local ImageGenerator = require("image_generator")
+    ImageGenerator.generate_async({ image_provider = "dashscope", dashscope_api_key = "key" }, "prompt", "same phrase",
+        function(path) completed.first = path end, function(err) error(err) end)
+    ImageGenerator.generate_async({ image_provider = "dashscope", dashscope_api_key = "key" }, "prompt", "same phrase",
+        function(path) completed.second = path end, function(err) error(err) end)
+    -- create first, create second, then complete second before first.
+    table.remove(scheduled, 1)()
+    table.remove(scheduled, 1)()
+    table.remove(scheduled, 2)()
+    table.remove(scheduled, 1)()
+    assert(completed.first ~= completed.second, "same-second image requests must have unique paths")
+    assert(completed.first:match("same_phrase_1700000000_%d+%.png$"), "image filename must remain safe and readable")
+    local current = { phrase = "same phrase" }
+    assert(CardStorage.save_card(current), "current image test card must save")
+    assert(CardStorage.update_image_path(current, completed.second), "reverse-order current image must persist")
+    CardStorage.remove_image_if_unreferenced(completed.first)
+    assert(not io.open(completed.first, "rb"), "stale image output must be removed")
+    assert(io.open(completed.second, "rb"), "stale cleanup must not delete the current image")
+    assert(not CardStorage.remove_image_if_unreferenced(completed.second),
+           "persisted current path must be protected from cleanup")
+    os.remove(completed.second)
+    os.remove("/tmp/anki_flashcards.json")
+    os.time = saved_time
+    package.loaded.json = saved_json
+    package.loaded["image_generator"] = nil
+end
+
 -- save_raw must surface every failure after opening the file so callers can
 -- report a failed persistence operation instead of pretending it succeeded.
 local original_io_open = io.open
@@ -255,7 +349,7 @@ local function reset_main(card_results, options)
             end,
             replace_card = function(old, card)
                 assert(old._storage_id, "regeneration must target saved generation")
-                if options.replace_fails then return false, "write_failed" end
+                if options.replace_fails then return false, options.replace_error or "write_failed" end
                 next_id = next_id + 1
                 card._storage_id = tostring(next_id)
                 card.sent_to_anki = old.sent_to_anki
@@ -283,6 +377,12 @@ local function reset_main(card_results, options)
                 if not storage_cards[1] or storage_cards[1]._storage_id ~= card._storage_id then return false end
                 storage_cards[1]._audio_url = url
                 return true
+            end,
+            remove_image_if_unreferenced = function(path)
+                for _, stored_card in ipairs(storage_cards) do
+                    if stored_card.image_path == path then return false end
+                end
+                return os.remove(path)
             end,
             mark_sent = function() return true end,
             find_by_position = function() return nil end,
@@ -429,6 +529,14 @@ replace_failure_viewer.on_regenerate()
 assert(#viewers == 2 and viewers[#viewers].card.phrase == "anchor",
        "failed replacement persistence must restore the existing viewer")
 assert(storage_cards[1].phrase == "anchor", "failed replacement persistence must retain stored card")
+
+local collision_restore = reset_main({ { phrase = "anchor", definition = "first" }, { phrase = "beta" } },
+                                    { replace_fails = true, replace_error = "already_saved" })
+collision_restore.callback()
+viewers[#viewers].on_regenerate()
+assert(#viewers == 2 and viewers[#viewers].card.phrase == "anchor"
+       and storage_cards[1].phrase == "anchor",
+       "duplicate regeneration rejection must restore the current viewer without mutation")
 
 local sentence_failure = reset_main({ { phrase = "anchor", definition = "first", text = "old", image_prompt = "old prompt" } },
                                    { text_results = { { text = "new", prompt = "new prompt" } }, update_card_fails = true })

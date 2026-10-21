@@ -35,10 +35,14 @@ local function ensure_image_dir()
     os.execute("mkdir -p '" .. IMAGE_DIR .. "'")
 end
 
--- Build a unique filename from the phrase + timestamp.
+-- Build a filesystem-safe path unique to this KOReader process. A sequence
+-- avoids collisions when requests for the same phrase begin in the same second.
+local image_path_sequence = 0
 local function make_save_path(phrase)
     local safe = (phrase or "card"):lower():gsub("[^%w%-%_]", "_"):sub(1, 40)
-    return IMAGE_DIR .. "/" .. safe .. "_" .. os.time() .. ".png"
+    if safe == "" then safe = "card" end
+    image_path_sequence = image_path_sequence + 1
+    return IMAGE_DIR .. "/" .. safe .. "_" .. os.time() .. "_" .. image_path_sequence .. ".png"
 end
 
 -- Download URL to a local file, returning (true) or (false, err).
