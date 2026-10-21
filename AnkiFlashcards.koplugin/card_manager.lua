@@ -118,6 +118,151 @@ local function show_stats()
     UIManager:show(Menu:new { title = title_str, item_table = stat_items })
 end
 
+-- ── Card export ─────────────────────────────────────────────────────────────
+
+local MISSING_BOOK = {}
+
+local function cards_for_book(cards, book_key)
+    local filtered = {}
+    local is_missing_book = book_key == MISSING_BOOK
+    for _, card in ipairs(cards) do
+        if (is_missing_book and (not card.book_title or card.book_title == ""))
+           or (not is_missing_book and card.book_title == book_key) then
+            table.insert(filtered, card)
+        end
+    end
+    return filtered
+end
+
+local function current_book_title(opts)
+    local document = opts and opts.ui and opts.ui.document
+    if not document or not document.getProps then return nil end
+    local ok, props = pcall(document.getProps, document)
+    if not (ok and props and props.title and props.title ~= "") then return nil end
+    local title = props.title:gsub("[\r\n]+", " "):match("^%s*(.-)%s*$")
+    if #title > 100 then title = title:sub(1, 100) end
+    return title ~= "" and title or nil
+end
+
+local function show_export_format(cards)
+    local format_dialog
+    local function close_format_dialog()
+        if format_dialog then
+            UIManager:close(format_dialog)
+            format_dialog = nil
+        end
+    end
+    local function export(format)
+        local path, count, err = CardStorage.export_cards(cards, format)
+        close_format_dialog()
+        if path then
+            local count_label = count == 1 and _("1 card")
+                                or tostring(count) .. _(" cards")
+            notify(_("Exported ") .. count_label .. _(" to ") .. path)
+        elseif err == "no_cards" then
+            notify(_("No cards to export"))
+        else
+            notify_error(_("Could not export cards"))
+        end
+    end
+
+    format_dialog = ButtonDialog:new {
+        title = _("Export Cards"),
+        buttons = {
+            {{ text = _("Export as CSV"), callback = function() export("csv") end }},
+            {{ text = _("Export as TSV"), callback = function() export("tsv") end }},
+            {{ text = _("Cancel"), callback = close_format_dialog }},
+        },
+    }
+    UIManager:show(format_dialog)
+end
+
+local function show_export_scope(opts)
+    local all_cards = CardStorage.load_cards()
+    if #all_cards == 0 then
+        notify(_("No cards to export"))
+        return
+    end
+
+    local scope_dialog
+    local function close_scope_dialog()
+        if scope_dialog then
+            UIManager:close(scope_dialog)
+            scope_dialog = nil
+        end
+    end
+    local function choose_cards(cards)
+        close_scope_dialog()
+        if #cards == 0 then
+            notify(_("No cards to export"))
+            return
+        end
+        show_export_format(cards)
+    end
+
+    local buttons = {
+        {{ text = _("All Cards (") .. tostring(#all_cards) .. ")", callback = function()
+            choose_cards(all_cards)
+        end }},
+    }
+
+    local current_book = current_book_title(opts)
+    if current_book then
+        table.insert(buttons, {{ text = _("Current Book: ") .. current_book, callback = function()
+            choose_cards(cards_for_book(all_cards, current_book))
+        end }})
+    end
+
+    table.insert(buttons, {{ text = _("Choose Book"), callback = function()
+        close_scope_dialog()
+        local books, seen = {}, {}
+        for index, card in ipairs(all_cards) do
+            local book_key = (card.book_title and card.book_title ~= "")
+                             and card.book_title or MISSING_BOOK
+            if not seen[book_key] then
+                seen[book_key] = true
+                table.insert(books, {
+                    key = book_key,
+                    label = book_key == MISSING_BOOK and _("Unknown book") or book_key,
+                })
+            end
+        end
+        table.sort(books, function(left, right)
+            if left.label == right.label then
+                return left.key == MISSING_BOOK and right.key ~= MISSING_BOOK
+            end
+            return left.label < right.label
+        end)
+
+        local book_dialog
+        local book_buttons = {}
+        for _, book in ipairs(books) do
+            local selected_book = book
+            table.insert(book_buttons, {{ text = selected_book.label, callback = function()
+                UIManager:close(book_dialog)
+                choose_cards(cards_for_book(all_cards, selected_book.key))
+            end }})
+        end
+        table.insert(book_buttons, {{ text = _("Cancel"), callback = function()
+            UIManager:close(book_dialog)
+        end }})
+        book_dialog = ButtonDialog:new {
+            title = _("Export Book"),
+            buttons = book_buttons,
+        }
+        UIManager:show(book_dialog)
+    end }})
+    table.insert(buttons, {{ text = _("Cancel"), callback = function()
+        close_scope_dialog()
+    end }})
+
+    scope_dialog = ButtonDialog:new {
+        title = _("Export Cards"),
+        buttons = buttons,
+    }
+    UIManager:show(scope_dialog)
+end
+
 -- ── Management submenu ────────────────────────────────────────────────────────
 
 function CardManager.show_manage(base_config, opts)
@@ -185,6 +330,11 @@ function CardManager.show_manage(base_config, opts)
             text = _("Stats by Book"),
             bold = true,
             callback = function() show_stats() end,
+        },
+        {
+            text = _("Export Cards"),
+            bold = true,
+            callback = function() show_export_scope(opts) end,
         },
         {
             text     = _("Highlights to Anki Cards"),

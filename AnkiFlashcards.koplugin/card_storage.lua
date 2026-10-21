@@ -6,6 +6,7 @@ local json        = require("json")
 
 local CARDS_FILE    = DataStorage:getDataDir() .. "/anki_flashcards.json"
 local SETTINGS_FILE = DataStorage:getDataDir() .. "/anki_flashcards_settings.json"
+local EXPORT_PREFIX = DataStorage:getDataDir() .. "/anki_flashcards_export_"
 
 local CardStorage = {}
 
@@ -106,6 +107,98 @@ end
 -- Returns the full list of saved cards.
 function CardStorage.load_cards()
     return load_raw()
+end
+
+-- ── Card export ─────────────────────────────────────────────────────────────
+
+local function escape_export_cell(value, delimiter)
+    value = tostring(value or "")
+    -- Spreadsheet applications may evaluate cells that begin with formula
+    -- markers, including after leading whitespace. Prefix an apostrophe so the
+    -- original value is imported as literal text.
+    if value:match("^%s*[=+%-@]") then
+        value = "'" .. value
+    end
+    if value:find('"', 1, true)
+       or value:find(delimiter, 1, true)
+       or value:find("\r", 1, true)
+       or value:find("\n", 1, true) then
+        return '"' .. value:gsub('"', '""') .. '"'
+    end
+    return value
+end
+
+local function image_filename(path)
+    if not path or path == "" then return "" end
+    return path:match("([^/\\]+)$") or path
+end
+
+local function export_path(format)
+    local stamp = os.date("%Y%m%d-%H%M%S")
+    local path = EXPORT_PREFIX .. stamp .. "." .. format
+    local suffix = 2
+    local existing = io.open(path, "r")
+    while existing do
+        existing:close()
+        path = EXPORT_PREFIX .. stamp .. "_" .. tostring(suffix) .. "." .. format
+        suffix = suffix + 1
+        existing = io.open(path, "r")
+    end
+    return path
+end
+
+-- Export cards as CSV or TSV. Images are represented by filename only.
+-- Returns output path and count, or nil, 0, and an error code.
+function CardStorage.export_cards(cards, format)
+    if format ~= "csv" and format ~= "tsv" then
+        return nil, 0, "unsupported_format"
+    end
+    if not cards or #cards == 0 then
+        return nil, 0, "no_cards"
+    end
+
+    local delimiter = format == "csv" and "," or "\t"
+    local path = export_path(format)
+    local temp_path = path .. ".tmp"
+    local file = io.open(temp_path, "w")
+    if not file then return nil, 0, "write_failed" end
+
+    local fields = { "Phrase", "IPA", "Definition", "Synonyms", "Text", "Source", "Image" }
+    if not file:write(table.concat(fields, delimiter), "\r\n") then
+        file:close()
+        os.remove(temp_path)
+        return nil, 0, "write_failed"
+    end
+    for _, card in ipairs(cards) do
+        card = card or {}
+        local row = {
+            tostring(card.phrase or ""),
+            tostring(card.ipa or ""),
+            tostring(card.definition or ""),
+            tostring(card.synonyms or ""),
+            tostring(card.text or ""),
+            tostring(card.source or ""),
+            tostring(image_filename(card.image_path) or ""),
+        }
+        for i = 1, #row do
+            row[i] = escape_export_cell(row[i], delimiter)
+        end
+        if not file:write(table.concat(row, delimiter), "\r\n") then
+            file:close()
+            os.remove(temp_path)
+            return nil, 0, "write_failed"
+        end
+    end
+    if not file:close() then
+        os.remove(temp_path)
+        return nil, 0, "write_failed"
+    end
+
+    if not os.rename(temp_path, path) then
+        os.remove(temp_path)
+        return nil, 0, "write_failed"
+    end
+    return path, #cards
 end
 
 -- Update image_path on an already-saved card (called after async generation).
