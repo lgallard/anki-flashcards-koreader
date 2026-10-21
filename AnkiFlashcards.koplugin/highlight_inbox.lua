@@ -36,6 +36,31 @@ local function cambridge_url(phrase, config)
     return "https://dictionary.cambridge.org/dictionary/english/" .. slug
 end
 
+-- Inbox cards have no viewer lifecycle, but async image work must still be
+-- bound to the saved generation that started it.  Never fall back to matching
+-- an unsaved card by phrase: that can overwrite an existing duplicate card.
+local function start_image_request(config, card)
+    local storage_id = card._storage_id
+    if not storage_id or not card.image_prompt or not ImageGenerator.images_enabled(config) then
+        return
+    end
+    ImageGenerator.generate_async(
+        config, card.image_prompt, card.phrase,
+        function(img_path)
+            if card._storage_id ~= storage_id then
+                if img_path then os.remove(img_path) end
+                return
+            end
+            if not CardStorage.update_image_path(card, img_path) then
+                if img_path then os.remove(img_path) end
+                return
+            end
+            card.image_path = img_path
+        end,
+        nil
+    )
+end
+
 -- Internal: build and show the selection menu with current state.
 local function show_menu(ui, config, highlights, already_carded, selected)
     local menu_ref = {}
@@ -86,6 +111,7 @@ local function show_menu(ui, config, highlights, already_carded, selected)
             local total     = #to_do
             local done      = 0
             local failed    = 0
+            local duplicates = 0
             local prog_notif
 
             local function show_progress(i)
@@ -100,6 +126,9 @@ local function show_menu(ui, config, highlights, already_carded, selected)
             local function finish()
                 if prog_notif then UIManager:close(prog_notif) end
                 local msg = tostring(done) .. _(" card(s) saved")
+                if duplicates > 0 then
+                    msg = msg .. ", " .. tostring(duplicates) .. _(" already saved")
+                end
                 if failed > 0 then
                     msg = msg .. ", " .. tostring(failed) .. _(" failed")
                 end
@@ -119,17 +148,14 @@ local function show_menu(ui, config, highlights, already_carded, selected)
                         card.source      = cambridge_url(card.phrase, config)
                         card.book_title  = title
                         card.book_author = author
-                        CardStorage.save_card(card)
-                        done = done + 1
-                        if card.image_prompt and ImageGenerator.images_enabled(config) then
-                            ImageGenerator.generate_async(
-                                config, card.image_prompt, card.phrase,
-                                function(img_path)
-                                    card.image_path = img_path
-                                    CardStorage.update_image_path(card, img_path)
-                                end,
-                                nil
-                            )
+                        local saved, save_err = CardStorage.save_card(card)
+                        if saved and card._storage_id then
+                            done = done + 1
+                            start_image_request(config, card)
+                        elseif save_err == "already_saved" then
+                            duplicates = duplicates + 1
+                        else
+                            failed = failed + 1
                         end
                     else
                         failed = failed + 1
