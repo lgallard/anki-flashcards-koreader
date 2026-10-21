@@ -81,6 +81,7 @@ local CardViewer = InputContainer:extend {
     on_navigate_to_source = nil, -- function() — jump to highlight position in book
     on_regen_text  = nil,   -- function() — regenerate example sentence only
     on_regen_image = nil,   -- function() — regenerate image only
+    on_close       = nil,   -- function() — owner invalidates async work
     on_highlight_dialog = nil, -- function() — open KOReader's native highlight dialog (color, style, delete…)
     read_only      = false,
 
@@ -464,6 +465,8 @@ function CardViewer:editField(field_def)
                     -- Defer widget-tree changes until after the current
                     -- event cycle completes (avoids crash mid-callback).
                     UIManager:scheduleIn(0, function()
+                        local before = {}
+                        for k, v in pairs(self.card) do before[k] = v end
                         local old_phrase = self.card.phrase
                         self.card[field_def.key] = new_val
                         -- When phrase changes: auto-update Cambridge source URL,
@@ -475,7 +478,14 @@ function CardViewer:editField(field_def)
                             self.card.source = "https://dictionary.cambridge.org/dictionary/english/" .. slug
                             self.card.ipa    = ""
                         end
-                        if self.on_update then self.on_update(self.card) end
+                        if self.on_update and not self.on_update(self.card) then
+                            for k in pairs(self.card) do self.card[k] = nil end
+                            for k, v in pairs(before) do self.card[k] = v end
+                            UIManager:show(InfoMessage:new {
+                                text = _("Could not save card changes"), timeout = 5,
+                            })
+                            return
+                        end
                         local new_v = self:update()
                         if phrase_changed and self.on_regen_ipa then
                             self.on_regen_ipa(new_val, self.card, new_v)
@@ -496,6 +506,7 @@ end
 function CardViewer:update(new_card, new_show_back)
     local card      = new_card or self.card
     local show_back = new_show_back ~= nil and new_show_back or self.show_back
+    self._updating = true
     UIManager:close(self)
     local updated = CardViewer:new {
         card                  = card,
@@ -508,6 +519,7 @@ function CardViewer:update(new_card, new_show_back)
         on_navigate_to_source = self.on_navigate_to_source,
         on_regen_text         = self.on_regen_text,
         on_regen_image        = self.on_regen_image,
+        on_close              = self.on_close,
         on_highlight_dialog   = self.on_highlight_dialog,
         read_only             = self.read_only,
     }
@@ -570,6 +582,7 @@ function CardViewer:onSwipe(arg, ges)
 end
 
 function CardViewer:onClose()
+    if not self._updating and self.on_close then self.on_close() end
     UIManager:close(self)
     return true
 end

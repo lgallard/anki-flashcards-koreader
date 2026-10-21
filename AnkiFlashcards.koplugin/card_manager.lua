@@ -28,6 +28,40 @@ local function notify_error(text)
     UIManager:show(InfoMessage:new { text = text, timeout = 5 })
 end
 
+local function close_for_replacement(viewer)
+    if viewer then viewer._updating = true; UIManager:close(viewer) end
+end
+
+local function invalidate_viewer_session(session)
+    session.open = false
+    session.viewer = nil
+    session.image_version = (session.image_version or 0) + 1
+end
+
+local function begin_image_request(config, card, session, after_success, on_error)
+    session.image_version = (session.image_version or 0) + 1
+    local version = session.image_version
+    local storage_id = card._storage_id
+    ImageGenerator.generate_async(config, card.image_prompt, card.phrase, function(image_path)
+        if not session.open or session.image_version ~= version
+           or card._storage_id ~= storage_id then
+            os.remove(image_path)
+            return
+        end
+        if not CardStorage.update_image_path(card, image_path) then
+            os.remove(image_path)
+            return
+        end
+        if not session.open or session.image_version ~= version then
+            os.remove(image_path)
+            return
+        end
+        card.image_path = image_path
+        if session.viewer then session.viewer = session.viewer:update(card) end
+        if after_success then after_success() end
+    end, on_error)
+end
+
 -- Handles both full CONFIGURATION (with nested .anki) and a flat Anki-only table.
 local function effective_config(base)
     local cfg = {}
@@ -66,7 +100,10 @@ local function send_one(anki_config, card, tts_config)
     end
     local ok, err = AnkiSync.send_card(anki_config, card, tts_config)
     if ok then
-        CardStorage.mark_sent(card.phrase)
+        if not CardStorage.mark_sent(card.phrase) then
+            notify_error(_("Anki accepted the card, but its sent state could not be saved"))
+            return false
+        end
         return true
     else
         notify_error(_("Anki error: ") .. (err or "unknown"))
@@ -448,8 +485,7 @@ function CardManager.show(base_config, filter_book, ui)
                        .. book .. "  (" .. (card.date or "") .. ")"
 
         local function open_viewer()
-            local viewer_ref = {}
-            local card_ref   = { phrase = card.phrase }
+            local session = { open = true, image_version = 0 }
             local function make_viewer(show_back)
                 local v
                 v = CardViewer:new {
@@ -459,26 +495,30 @@ function CardManager.show(base_config, filter_book, ui)
                     on_show_answer = function()
                         -- Close whichever viewer is currently showing
                         -- (may differ from v after an async image update).
-                        local cur = viewer_ref[1] or v
-                        UIManager:close(cur)
-                        viewer_ref[1] = make_viewer(true)
+                        local cur = session.viewer or v
+                        close_for_replacement(cur)
+                        session.viewer = make_viewer(true)
                     end,
                     on_send = function()
-                        return AnkiSync.send_card(anki_config, card, base_config)
+                        local ok, err = AnkiSync.send_card(anki_config, card, base_config)
+                        if ok and not CardStorage.mark_sent(card.phrase) then
+                            return false, _("Anki accepted the card, but its sent state could not be saved")
+                        end
+                        return ok, err
                     end,
                     on_navigate_to_source = (ui and card.highlight_pos0) and function()
-                        local cur = viewer_ref[1]
+                        local cur = session.viewer
+                        invalidate_viewer_session(session)
                         if cur then UIManager:close(cur) end
                         if menu_instance then UIManager:close(menu_instance) end
                         local event_name = ui.paging and "GotoPage" or "GotoXPointer"
                         ui:handleEvent(Event:new(event_name, card.highlight_pos0))
                     end or nil,
                     on_update = function(updated_card)
-                        CardStorage.update_card(card_ref.phrase, updated_card)
-                        card_ref.phrase = updated_card.phrase
+                        return CardStorage.update_card(card, updated_card)
                     end,
                     on_regen_text = function()
-                        if viewer_ref[1] then UIManager:close(viewer_ref[1]) end
+                        close_for_replacement(session.viewer)
                         local loading_t = Notification:new {
                             text    = _("Regenerating sentence…"),
                             timeout = 30,
@@ -490,28 +530,19 @@ function CardManager.show(base_config, filter_book, ui)
                                 local new_text, new_prompt = CardGenerator.generate_text(base_config, card.phrase)
                                 if not new_text then
                                     notify_error(_("Regen failed: ") .. (new_prompt or "unknown"))
-                                    viewer_ref[1] = make_viewer(true)
+                                    session.viewer = make_viewer(true)
                                     return
                                 end
                                 card.text         = new_text
                                 card.image_prompt = new_prompt
-                                CardStorage.update_card(card_ref.phrase, card)
-                                viewer_ref[1] = make_viewer(true)
+                                if not CardStorage.update_card(card, card) then
+                                    notify_error(_("Could not save regenerated sentence"))
+                                    return
+                                end
+                                session.viewer = make_viewer(true)
                                 -- Kick off image generation with new prompt.
                                 if new_prompt and ImageGenerator.images_enabled(base_config) then
-                                    ImageGenerator.generate_async(
-                                        base_config,
-                                        new_prompt,
-                                        card.phrase,
-                                        function(img_path)
-                                            card.image_path = img_path
-                                            CardStorage.update_image_path(card, img_path)
-                                            if viewer_ref[1] then
-                                                viewer_ref[1] = viewer_ref[1]:update(card)
-                                            end
-                                        end,
-                                        nil
-                                    )
+                                    begin_image_request(base_config, card, session, nil, nil)
                                 end
                             end)
                         end)
@@ -523,26 +554,13 @@ function CardManager.show(base_config, filter_book, ui)
                         end
                         local old_image = card.image_path
                         notify(_("Regenerating image…"))
-                        ImageGenerator.generate_async(
-                            base_config,
-                            card.image_prompt,
-                            card.phrase,
-                            function(img_path)
-                                if old_image and old_image ~= "" then
-                                    os.remove(old_image)
-                                end
-                                card.image_path = img_path
-                                CardStorage.update_image_path(card, img_path)
-                                if viewer_ref[1] then
-                                    viewer_ref[1] = viewer_ref[1]:update(card)
-                                end
+                        begin_image_request(base_config, card, session, function()
+                                if old_image and old_image ~= "" then os.remove(old_image) end
                                 UIManager:setDirty(nil, "full")
                                 notify(_("New image loaded!"))
-                            end,
-                            function(err)
+                            end, function(err)
                                 notify_error(_("Image regen failed: ") .. (err or "unknown"))
-                            end
-                        )
+                            end)
                     end or nil,
                     on_regen_ipa = function(new_phrase, updated_card, new_viewer)
                         NetworkMgr:runWhenOnline(function()
@@ -550,7 +568,10 @@ function CardManager.show(base_config, filter_book, ui)
                                 local ipa, err = CardGenerator.generate_ipa(base_config, new_phrase)
                                 if ipa then
                                     updated_card.ipa = ipa
-                                    CardStorage.update_card(updated_card.phrase, updated_card)
+                                    if not CardStorage.update_card(updated_card, updated_card) then
+                                        notify_error(_("Could not save IPA update"))
+                                        return
+                                    end
                                     local still_shown = false
                                     for w in UIManager:topdown_widgets_iter() do
                                         if w == new_viewer then still_shown = true; break end
@@ -563,11 +584,12 @@ function CardManager.show(base_config, filter_book, ui)
                             end)
                         end)
                     end,
+                    on_close = function() invalidate_viewer_session(session) end,
                 }
                 UIManager:show(v)
                 return v
             end
-            viewer_ref[1] = make_viewer(false)
+            session.viewer = make_viewer(false)
             -- Auto-regenerate image if missing (e.g. synced card).
             -- Only poll AnkiVocab for cards that were created via AnkiVocab
             -- (_ankivocab_word is set); otherwise use the local image_prompt.
@@ -585,19 +607,7 @@ function CardManager.show(base_config, filter_book, ui)
                and has_image_source
                and ImageGenerator.images_enabled(img_cfg)
                and NetworkMgr:isOnline() then
-                ImageGenerator.generate_async(
-                    img_cfg,
-                    card.image_prompt,
-                    card.phrase,
-                    function(img_path)
-                        card.image_path = img_path
-                        CardStorage.update_image_path(card, img_path)
-                        if viewer_ref[1] then
-                            viewer_ref[1] = viewer_ref[1]:update(card)
-                        end
-                    end,
-                    nil  -- silent on error
-                )
+                begin_image_request(img_cfg, card, session, nil, nil)
             end
         end
 

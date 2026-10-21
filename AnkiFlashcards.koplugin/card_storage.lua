@@ -63,18 +63,29 @@ local function load_raw()
 end
 
 local function save_raw(entries)
-    local f = io.open(CARDS_FILE, "w")
-    if not f then return false end
     local ok, encoded = pcall(json.encode, entries)
-    if not ok then
-        f:close()
+    if not ok then return false end
+
+    -- Never truncate the live database until a complete replacement is ready.
+    -- The temporary file is beside CARDS_FILE so rename stays on one filesystem.
+    local temp_path = CARDS_FILE .. ".tmp-" .. tostring(os.time()) .. "-" .. tostring(math.random(1, 2147483646))
+    local f = io.open(temp_path, "w")
+    if not f then return false end
+    local wrote, write_result = pcall(f.write, f, encoded)
+    if not wrote or not write_result then
+        pcall(f.close, f)
+        os.remove(temp_path)
         return false
     end
-    if not f:write(encoded) then
-        f:close()
+    local closed, close_result = pcall(f.close, f)
+    if not closed or not close_result then
+        os.remove(temp_path)
         return false
     end
-    if not f:close() then return false end
+    if not os.rename(temp_path, CARDS_FILE) then
+        os.remove(temp_path)
+        return false
+    end
     return true
 end
 
@@ -116,6 +127,24 @@ local function find_entry(entries, target)
         end
     end
     return nil
+end
+
+-- Records written before stable identities were introduced are safe for
+-- synchronous phrase operations, but async callbacks must never keep using a
+-- phrase-only identity. Persist an id before the caller starts its mutation and
+-- copy it to the in-memory card used by that callback.
+local function ensure_entry_identity(entries, entry, target)
+    if entry._storage_id then
+        if type(target) == "table" then target._storage_id = entry._storage_id end
+        return true
+    end
+    entry._storage_id = new_storage_id(entries)
+    if not save_raw(entries) then
+        entry._storage_id = nil
+        return false
+    end
+    if type(target) == "table" then target._storage_id = entry._storage_id end
+    return true
 end
 
 -- Save a new card. Returns true on success or false + reason string.
@@ -258,6 +287,7 @@ function CardStorage.update_image_path(target, path)
     local entries = load_raw()
     local e = find_entry(entries, target)
     if e then
+        if not ensure_entry_identity(entries, e, target) then return false end
         e.image_path = path
         return save_raw(entries)
     end
@@ -269,6 +299,7 @@ function CardStorage.update_audio_url(target, url)
     local entries = load_raw()
     local e = find_entry(entries, target)
     if e then
+        if not ensure_entry_identity(entries, e, target) then return false end
         e._audio_url = url
         return save_raw(entries)
     end
@@ -281,7 +312,7 @@ function CardStorage.update_card(target, new_card)
     local entries = load_raw()
     local e = find_entry(entries, target)
     if e then
-        if not e._storage_id then e._storage_id = new_storage_id(entries) end
+        if not ensure_entry_identity(entries, e, target) then return false end
         e.phrase       = new_card.phrase       or ""
         e.ipa          = new_card.ipa          or ""
         e.definition   = new_card.definition   or ""
@@ -290,9 +321,10 @@ function CardStorage.update_card(target, new_card)
         e.source       = new_card.source       or ""
         e.image_prompt = new_card.image_prompt or e.image_prompt or ""
         e.updated_at   = os.time()
+        if not save_raw(entries) then return false end
         new_card._storage_id = e._storage_id
         new_card.sent_to_anki = e.sent_to_anki
-        return save_raw(entries)
+        return true
     end
     return false
 end
@@ -304,6 +336,7 @@ function CardStorage.replace_card(target, new_card)
     local entries = load_raw()
     local e = find_entry(entries, target)
     if not e then return false, "not_saved" end
+    if not ensure_entry_identity(entries, e, target) then return false, "write_failed" end
 
     local sent_to_anki = e.sent_to_anki
     local date = e.date
@@ -415,10 +448,10 @@ function CardStorage.mark_sent(phrase)
     for _, e in ipairs(entries) do
         if normalize(e.phrase) == key then
             e.sent_to_anki = true
-            break
+            return save_raw(entries)
         end
     end
-    save_raw(entries)
+    return false
 end
 
 -- Persist Anki connection settings (override configuration.lua at runtime).

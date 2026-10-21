@@ -80,6 +80,103 @@ assert(not CardStorage.update_image_path(regenerated, "/tmp/encode-failure.png")
 package.loaded.json.encode = original_encode
 io.open = original_io_open
 
+-- Atomic persistence must leave an already-valid database readable after every
+-- failure point, and legacy phrase records must acquire an id before an async
+-- callback can outlive a delete/recreate cycle.
+do
+    local saved_open, saved_rename = io.open, os.rename
+    local files, encoded_data, serial = {}, {}, 0
+    local fail_encode, fail_write, fail_close, fail_rename = false, false, false, false
+    local function clone_entries(entries)
+        local copy = {}
+        for i, entry in ipairs(entries or {}) do copy[i] = copy_card(entry) end
+        return copy
+    end
+    package.loaded["card_storage"] = nil
+    package.loaded["datastorage"] = nil
+    package.preload["datastorage"] = function()
+        return { getDataDir = function() return "/atomic-test" end }
+    end
+    package.loaded["json"] = nil
+    package.preload["json"] = function()
+        return {
+            encode = function(entries)
+                if fail_encode then error("encode failure") end
+                serial = serial + 1
+                local token = "encoded-" .. tostring(serial)
+                encoded_data[token] = clone_entries(entries)
+                return token
+            end,
+            decode = function(token)
+                return clone_entries(encoded_data[token] or {})
+            end,
+        }
+    end
+    io.open = function(path, mode)
+        if mode == "r" then
+            if files[path] == nil then return nil end
+            return { read = function() return files[path] end, close = function() return true end }
+        end
+        if mode ~= "w" then return nil end
+        local buffer = ""
+        return {
+            write = function(_, data)
+                if fail_write then return false end
+                buffer = buffer .. data
+                return true
+            end,
+            close = function()
+                if fail_close then return false end
+                files[path] = buffer
+                return true
+            end,
+        }
+    end
+    os.rename = function(from, to)
+        if fail_rename then return false end
+        files[to], files[from] = files[from], nil
+        return true
+    end
+    local AtomicStorage = require("card_storage")
+    local live = "/atomic-test/anki_flashcards.json"
+    local function reset_valid()
+        files, encoded_data, serial = {}, {}, 0
+        encoded_data.valid = { { phrase = "legacy", definition = "original" } }
+        files[live] = "valid"
+        fail_encode, fail_write, fail_close, fail_rename = false, false, false, false
+    end
+    local function assert_original_survives(label)
+        local cards = AtomicStorage.load_cards()
+        assert(#cards == 1 and cards[1].phrase == "legacy" and not cards[1]._storage_id,
+               label .. " must leave the original database readable and unchanged")
+    end
+    for label, set_failure in pairs({
+        encode = function() fail_encode = true end,
+        write = function() fail_write = true end,
+        close = function() fail_close = true end,
+        rename = function() fail_rename = true end,
+    }) do
+        reset_valid()
+        set_failure()
+        assert(not AtomicStorage.update_image_path({ phrase = "legacy" }, "/tmp/new.png"),
+               label .. " failure must be reported")
+        assert_original_survives(label)
+    end
+    reset_valid()
+    local legacy = { phrase = "legacy" }
+    assert(AtomicStorage.update_image_path(legacy, "/tmp/first.png"), "legacy callback must migrate identity")
+    assert(legacy._storage_id, "legacy in-memory card must receive its persisted identity")
+    AtomicStorage.delete_card(1)
+    local replacement = { phrase = "legacy", definition = "replacement" }
+    assert(AtomicStorage.save_card(replacement), "replacement must save")
+    assert(not AtomicStorage.update_image_path(legacy, "/tmp/stale-legacy.png"),
+           "legacy callback must not mutate delete/recreate same-phrase card")
+    assert(AtomicStorage.load_cards()[1]._storage_id == replacement._storage_id,
+           "stale legacy callback changed replacement identity")
+    io.open, os.rename = saved_open, saved_rename
+    package.loaded["card_storage"] = nil
+end
+
 -- Load main.lua with KOReader dependencies mocked, then drive its highlight flow.
 local events, entries, viewers, generated_cards, storage_cards, image_callbacks, audio_callbacks, viewer_updates
 local function reset_main(card_results, options)
@@ -107,6 +204,7 @@ local function reset_main(card_results, options)
         return {
             show = function(_, widget) if widget.is_viewer then viewers[#viewers + 1] = widget end end,
             close = function() end,
+            setDirty = function() end,
             scheduleIn = function(_, delay, callback) if delay < 1 then callback() end end,
         }
     end
@@ -156,6 +254,7 @@ local function reset_main(card_results, options)
             end,
             update_card = function() return true end,
             update_image_path = function(card, path)
+                if options.update_image_fails then return false end
                 if not storage_cards[1] or storage_cards[1]._storage_id ~= card._storage_id then return false end
                 storage_cards[1].image_path = path
                 return true
@@ -238,6 +337,54 @@ assert(#viewer_updates == 1 and viewer_updates[1].viewer == replacement_viewer,
 assert(storage_cards[1].image_path == "/tmp/current.png"
        and storage_cards[1]._audio_url == "https://audio.example/current.mp3",
        "current callbacks must persist replacement media")
+
+-- A newer image request wins; stale output is deleted, and a dismissed viewer
+-- rejects output without reopening or persisting it.
+local old_image, stale_image, current_image = "/tmp/issue72-old.png", "/tmp/issue72-stale.png", "/tmp/issue72-current.png"
+for _, path in ipairs({ old_image, stale_image, current_image }) do
+    local f = assert(io.open(path, "w")); f:write("x"); f:close()
+end
+local media_action = reset_main({ {
+    phrase = "anchor", definition = "first", image_prompt = "image", image_path = old_image,
+} }, { images_enabled = true })
+media_action.callback()
+local media_viewer = viewers[#viewers]
+media_viewer.on_regen_image()
+media_viewer.on_regen_image()
+assert(#image_callbacks == 3, "initial plus two image requests must retain separate callbacks; got " .. tostring(#image_callbacks))
+image_callbacks[2](stale_image)
+assert(not io.open(stale_image, "r") and storage_cards[1].image_path == old_image,
+       "stale image result must be deleted without replacing the current image")
+image_callbacks[3](current_image)
+assert(not io.open(old_image, "r") and storage_cards[1].image_path == current_image,
+       "old image must be removed only after the current replacement persisted")
+os.remove(current_image)
+
+local dismissed_image = "/tmp/issue72-dismissed.png"
+local dismissed_action = reset_main({ {
+    phrase = "dismiss", definition = "first", image_prompt = "image",
+} }, { images_enabled = true })
+dismissed_action.callback()
+local dismissed_viewer = viewers[#viewers]
+local f = assert(io.open(dismissed_image, "w")); f:write("x"); f:close()
+dismissed_viewer.on_close()
+image_callbacks[1](dismissed_image)
+assert(not io.open(dismissed_image, "r") and not storage_cards[1].image_path,
+       "dismissed viewer must reject and clean its late image callback")
+
+local retained_old, rejected_new = "/tmp/issue72-retained-old.png", "/tmp/issue72-rejected-new.png"
+for _, path in ipairs({ retained_old, rejected_new }) do
+    local file = assert(io.open(path, "w")); file:write("x"); file:close()
+end
+local failed_media_action = reset_main({ {
+    phrase = "failure", definition = "first", image_prompt = "image", image_path = retained_old,
+} }, { images_enabled = true, update_image_fails = true })
+failed_media_action.callback()
+viewers[#viewers].on_regen_image()
+image_callbacks[2](rejected_new)
+assert(io.open(retained_old, "r") and not io.open(rejected_new, "r"),
+       "failed replacement persistence must retain old image and clean new output")
+os.remove(retained_old)
 
 local failed_action = reset_main({ false })
 failed_action.callback()

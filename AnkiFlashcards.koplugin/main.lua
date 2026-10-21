@@ -177,17 +177,43 @@ local function can_generate_image(card, img_cfg)
     return has_prompt or is_ankivocab_card
 end
 
--- Async image/audio work is tied to a saved generation by _storage_id.
--- Do not change the in-memory card or viewer unless the identity-aware storage
--- update succeeded: a full regeneration gives the replacement a new identity,
--- so a late callback for the previous generation becomes a no-op.
-local function apply_async_image(card, image_path, viewer_ref)
-    if not CardStorage.update_image_path(card, image_path) then return false end
-    card.image_path = image_path
-    if viewer_ref[1] then
-        viewer_ref[1] = viewer_ref[1]:update(card)
-    end
-    return true
+-- Async image work is tied to both a saved generation and one visible viewer
+-- session. Only the latest request may persist or redraw; rejected callbacks
+-- remove their generated local file so stale work cannot leave orphans.
+local function begin_image_request(config, card, session, after_success, on_error)
+    session.image_version = (session.image_version or 0) + 1
+    local version = session.image_version
+    local storage_id = card._storage_id
+    ImageGenerator.generate_async(config, card.image_prompt, card.phrase, function(image_path)
+        if not session.open or session.image_version ~= version
+           or card._storage_id ~= storage_id then
+            os.remove(image_path)
+            return
+        end
+        if not CardStorage.update_image_path(card, image_path) then
+            os.remove(image_path)
+            return
+        end
+        -- on_close cannot interleave within this callback, but keep this guard
+        -- explicit for future asynchronous storage implementations.
+        if not session.open or session.image_version ~= version then
+            os.remove(image_path)
+            return
+        end
+        card.image_path = image_path
+        if session.viewer then session.viewer = session.viewer:update(card) end
+        if after_success then after_success() end
+    end, on_error)
+end
+
+local function close_for_replacement(viewer)
+    if viewer then viewer._updating = true; UIManager:close(viewer) end
+end
+
+local function invalidate_viewer_session(session)
+    session.open = false
+    session.viewer = nil
+    session.image_version = (session.image_version or 0) + 1
 end
 
 local function apply_async_audio(card, audio_url)
@@ -444,7 +470,7 @@ function AnkiFlashcards:init()
                     -- the server-generated audio when sending to Anki.
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
-                    local viewer_ref = {}
+                    local session = { open = true, image_version = 0 }
 
                     -- make_viewer creates a CardViewer for card c.
                     -- show_back=false → front (question) side.
@@ -457,26 +483,26 @@ function AnkiFlashcards:init()
                             on_show_answer = function()
                                 -- Close whichever viewer is currently showing
                                 -- (may differ from v after an async update).
-                                local cur = viewer_ref[1] or v
-                                UIManager:close(cur)
+                                local cur = session.viewer or v
+                                close_for_replacement(cur)
                                 local nv = make_viewer(c, true)
-                                viewer_ref[1] = nv
+                                session.viewer = nv
                             end,
 
                             on_update = function(updated_card)
-                                CardStorage.update_card(c, updated_card)
+                                return CardStorage.update_card(c, updated_card)
                             end,
 
                             on_send = function()
                                 local ok, err = AnkiSync.send_card(get_anki_config(), c, CONFIGURATION)
-                                if ok then CardStorage.mark_sent(c.phrase) end
+                                if ok and not CardStorage.mark_sent(c.phrase) then
+                                    return false, _("Anki accepted the card, but its sent state could not be saved")
+                                end
                                 return ok, err
                             end,
 
                             on_regenerate = function()
-                                if viewer_ref[1] then
-                                    UIManager:close(viewer_ref[1])
-                                end
+                                close_for_replacement(session.viewer)
                                 local loading2 = Notification:new {
                                     text    = _("Regenerating…"),
                                     timeout = 30,
@@ -509,26 +535,18 @@ function AnkiFlashcards:init()
                                     end
                                     -- Regenerated card starts on front again.
                                     local nv = make_viewer(new_card, false)
-                                    viewer_ref[1] = nv
+                                    session.viewer = nv
                                     -- Kick off new image generation.
                                     local new_img_config = make_image_config(new_card)
                                     if can_generate_image(new_card, new_img_config) then
-                                        ImageGenerator.generate_async(
-                                            new_img_config,
-                                            new_card.image_prompt,
-                                            new_card.phrase,
-                                            function(img_path)
-                                                apply_async_image(new_card, img_path, viewer_ref)
-                                            end,
-                                            nil  -- image errors are non-fatal
-                                        )
+                                        begin_image_request(new_img_config, new_card, session, nil, nil)
                                     end
                                     poll_pending_audio(new_card)
                                 end)
                             end,
 
                             on_regen_text = function()
-                                if viewer_ref[1] then UIManager:close(viewer_ref[1]) end
+                                close_for_replacement(session.viewer)
                                 local loading3 = Notification:new {
                                     text    = _("Regenerating sentence…"),
                                     timeout = 30,
@@ -543,23 +561,21 @@ function AnkiFlashcards:init()
                                                 text    = _("Regen failed: ") .. (new_prompt or "unknown"),
                                                 timeout = 5,
                                             })
-                                            viewer_ref[1] = make_viewer(c, true)
+                                            session.viewer = make_viewer(c, true)
                                             return
                                         end
                                         c.text         = new_text
                                         c.image_prompt = new_prompt
-                                        viewer_ref[1] = make_viewer(c, true)
+                                        if not CardStorage.update_card(c, c) then
+                                            UIManager:show(InfoMessage:new {
+                                                text = _("Could not save regenerated sentence"), timeout = 5,
+                                            })
+                                            return
+                                        end
+                                        session.viewer = make_viewer(c, true)
                                         -- Kick off image generation with new prompt.
                                         if new_prompt and ImageGenerator.images_enabled(CONFIGURATION) then
-                                            ImageGenerator.generate_async(
-                                                CONFIGURATION,
-                                                new_prompt,
-                                                c.phrase,
-                                                function(img_path)
-                                                    apply_async_image(c, img_path, viewer_ref)
-                                                end,
-                                                nil
-                                            )
+                                            begin_image_request(CONFIGURATION, c, session, nil, nil)
                                         end
                                     end)
                                 end)
@@ -578,12 +594,7 @@ function AnkiFlashcards:init()
                                     text    = _("Regenerating image…"),
                                     timeout = 60,
                                 })
-                                ImageGenerator.generate_async(
-                                    CONFIGURATION,
-                                    c.image_prompt,
-                                    c.phrase,
-                                    function(img_path)
-                                        if apply_async_image(c, img_path, viewer_ref) then
+                                begin_image_request(CONFIGURATION, c, session, function()
                                             -- Clean up old image only after the replacement persisted.
                                             if old_image and old_image ~= "" then
                                                 os.remove(old_image)
@@ -593,16 +604,14 @@ function AnkiFlashcards:init()
                                                 text    = _("New image loaded!"),
                                                 timeout = 3,
                                             })
-                                        end
-                                    end,
-                                    function(err)
+                                        end, function(err)
                                         UIManager:show(InfoMessage:new {
                                             text    = _("Image regen failed: ") .. (err or "unknown"),
                                             timeout = 5,
                                         })
-                                    end
-                                )
+                                    end)
                             end or nil,
+                            on_close = function() invalidate_viewer_session(session) end,
                         }
                         UIManager:show(v)
                         return v
@@ -610,21 +619,13 @@ function AnkiFlashcards:init()
 
                     -- Open on the front side.
                     local initial_viewer = make_viewer(card, false)
-                    viewer_ref[1] = initial_viewer
+                    session.viewer = initial_viewer
 
                     -- Start image generation in background.
                     local img_config = make_image_config(card)
                     card._image_url = nil
                     if can_generate_image(card, img_config) then
-                        ImageGenerator.generate_async(
-                            img_config,
-                            card.image_prompt,
-                            card.phrase,
-                            function(img_path)
-                                apply_async_image(card, img_path, viewer_ref)
-                            end,
-                            nil  -- image errors are non-fatal
-                        )
+                        begin_image_request(img_config, card, session, nil, nil)
                     end
 
                     -- Poll for AnkiVocab audio when generation returned pending.
@@ -702,7 +703,7 @@ function AnkiFlashcards:init()
                                  or (ann.text and CardStorage.find_by_phrase_fuzzy(ann.text))
                     if card then
                         local hl_index = box.index
-                        local viewer_ref = {}
+                        local session = { open = true, image_version = 0 }
                         local function make_viewer(show_back)
                             local v
                             v = CardViewer:new {
@@ -712,12 +713,16 @@ function AnkiFlashcards:init()
                                 on_show_answer = function()
                                     -- Close whichever viewer is currently showing
                                     -- (may differ from v after an async image update).
-                                    local cur = viewer_ref[1] or v
-                                    UIManager:close(cur)
-                                    viewer_ref[1] = make_viewer(true)
+                                    local cur = session.viewer or v
+                                    close_for_replacement(cur)
+                                    session.viewer = make_viewer(true)
                                 end,
                                 on_send = function()
-                                    return AnkiSync.send_card(get_anki_config(), card, CONFIGURATION)
+                                    local ok, err = AnkiSync.send_card(get_anki_config(), card, CONFIGURATION)
+                                    if ok and not CardStorage.mark_sent(card.phrase) then
+                                        return false, _("Anki accepted the card, but its sent state could not be saved")
+                                    end
+                                    return ok, err
                                 end,
                                 on_regen_image = ImageGenerator.images_enabled(CONFIGURATION) and function()
                                     if not card.image_prompt or card.image_prompt == "" then
@@ -732,12 +737,7 @@ function AnkiFlashcards:init()
                                         text    = _("Regenerating image…"),
                                         timeout = 60,
                                     })
-                                    ImageGenerator.generate_async(
-                                        CONFIGURATION,
-                                        card.image_prompt,
-                                        card.phrase,
-                                        function(img_path)
-                                            if apply_async_image(card, img_path, viewer_ref) then
+                                    begin_image_request(CONFIGURATION, card, session, function()
                                                 if old_image and old_image ~= "" then
                                                     os.remove(old_image)
                                                 end
@@ -745,16 +745,14 @@ function AnkiFlashcards:init()
                                                     text    = _("New image loaded!"),
                                                     timeout = 3,
                                                 })
-                                            end
-                                        end,
-                                        function(err)
+                                            end, function(err)
                                             UIManager:show(Notification:new {
                                                 text    = _("Image regen failed: ") .. (err or "unknown"),
                                                 timeout = 5,
                                             })
-                                        end
-                                    )
+                                        end)
                                 end or nil,
+                                on_close = function() invalidate_viewer_session(session) end,
                                 on_highlight_dialog = function()
                                     hl_self:showHighlightDialog(hl_index)
                                 end,
@@ -762,21 +760,13 @@ function AnkiFlashcards:init()
                             UIManager:show(v)
                             return v
                         end
-                        viewer_ref[1] = make_viewer(false)
+                        session.viewer = make_viewer(false)
                         -- Auto-regenerate image if missing (e.g. synced card).
                         local saved_img_cfg = make_image_config(card)
                         if (not card.image_path or card.image_path == "")
                            and can_generate_image(card, saved_img_cfg)
                            and NetworkMgr:isOnline() then
-                            ImageGenerator.generate_async(
-                                saved_img_cfg,
-                                card.image_prompt,
-                                card.phrase,
-                                function(img_path)
-                                    apply_async_image(card, img_path, viewer_ref)
-                                end,
-                                nil  -- silent on error
-                            )
+                            begin_image_request(saved_img_cfg, card, session, nil, nil)
                         end
                         return true
                     end
@@ -864,8 +854,7 @@ function AnkiFlashcards:init()
         for _, card in ipairs(cards) do
             if not card.sent_to_anki then
                 local ok = AnkiSync.send_card(cfg, card, CONFIGURATION)
-                if ok then
-                    CardStorage.mark_sent(card.phrase)
+                if ok and CardStorage.mark_sent(card.phrase) then
                     sent = sent + 1
                 end
             end
