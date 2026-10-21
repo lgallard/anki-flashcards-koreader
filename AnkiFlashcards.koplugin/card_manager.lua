@@ -389,7 +389,11 @@ function CardManager.show_manage(base_config, opts)
                     text        = _("Delete all saved cards? This cannot be undone."),
                     ok_text     = _("Clear All"),
                     ok_callback = function()
-                        CardStorage.clear_all()
+                        local cleared = CardStorage.clear_all()
+                        if not cleared then
+                            notify_error(_("Could not clear cards: local persistence failed"))
+                            return
+                        end
                         notify(_("All cards cleared"))
                         if manage_menu then UIManager:close(manage_menu) end
                     end,

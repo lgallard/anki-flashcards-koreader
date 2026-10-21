@@ -380,15 +380,18 @@ function CardStorage.delete_card(idx)
     return true
 end
 
--- Empty the entire card list and delete all associated image files.
+-- Empty the entire card list and delete all associated image files. Persist the
+-- empty list first so a write failure leaves every saved record and asset intact.
 function CardStorage.clear_all()
     local entries = load_raw()
+    if not save_raw({}) then return false, "write_failed" end
+
     for _, card in ipairs(entries) do
         if card.image_path and card.image_path ~= "" then
             os.remove(card.image_path)
         end
     end
-    save_raw({})
+    return true
 end
 
 -- Find and return a saved card by phrase (case-insensitive, trimmed).
