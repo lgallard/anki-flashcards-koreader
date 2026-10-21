@@ -277,11 +277,16 @@ do
 end
 
 -- Load main.lua with KOReader dependencies mocked, then drive its highlight flow.
-local events, entries, viewers, generated_cards, storage_cards, image_callbacks, audio_callbacks, viewer_updates
+local events, entries, viewers, generated_cards, storage_cards, image_callbacks, audio_callbacks, viewer_updates, shown_messages
 local function reset_main(card_results, options)
     options = options or {}
     events, entries, viewers, generated_cards, storage_cards = {}, {}, {}, card_results, {}
-    image_callbacks, audio_callbacks, viewer_updates = {}, {}, {}
+    image_callbacks, audio_callbacks, viewer_updates, shown_messages = {}, {}, {}, {}
+    if options.saved_highlight_card then
+        local saved = copy_card(options.saved_highlight_card)
+        saved._storage_id = saved._storage_id or "saved-highlight-1"
+        storage_cards[1] = saved
+    end
     package.loaded["main"] = nil
     for _, name in ipairs({
         "configuration", "device", "gettext", "ui/widget/infomessage", "ui/widget/notification",
@@ -301,10 +306,21 @@ local function reset_main(card_results, options)
     end
     package.preload["ui/uimanager"] = function()
         return {
-            show = function(_, widget) if widget.is_viewer then viewers[#viewers + 1] = widget end end,
+            show = function(_, widget)
+                if widget.is_viewer then viewers[#viewers + 1] = widget
+                elseif widget.text then shown_messages[#shown_messages + 1] = widget.text end
+            end,
             close = function() end,
             setDirty = function() end,
             scheduleIn = function(_, delay, callback) if delay < 1 then callback() end end,
+            topdown_widgets_iter = function()
+                local yielded = false
+                return function()
+                    if yielded then return nil end
+                    yielded = true
+                    return viewers[#viewers]
+                end
+            end,
         }
     end
     package.preload["ui/network/manager"] = function()
@@ -322,6 +338,11 @@ local function reset_main(card_results, options)
                 local result = options.text_results and table.remove(options.text_results, 1)
                 if result == false or not result then return nil, "sentence provider failed" end
                 return result.text, result.prompt
+            end,
+            generate_ipa = function(_, phrase)
+                local result = options.ipa_results and table.remove(options.ipa_results, 1)
+                if result == false then return nil, "IPA provider failed" end
+                return result or ("/" .. phrase .. "/")
             end,
         }
     end
@@ -358,12 +379,15 @@ local function reset_main(card_results, options)
                 return true
             end,
             update_card = function(old, candidate)
-                if options.update_card_fails then return false end
-                if storage_cards[1] then
-                    storage_cards[1].text = candidate.text
-                    storage_cards[1].image_prompt = candidate.image_prompt
+                if options.update_card_fails then
+                    return false, options.update_error or "write_failed"
+                end
+                if not storage_cards[1] or storage_cards[1]._storage_id ~= old._storage_id then
+                    return false, "not_saved"
                 end
                 candidate._storage_id = old._storage_id
+                storage_cards[1] = copy_card(candidate)
+                events[#events + 1] = "update"
                 return true
             end,
             ensure_identity = function(card) return card._storage_id ~= nil end,
@@ -385,7 +409,12 @@ local function reset_main(card_results, options)
                 return os.remove(path)
             end,
             mark_sent = function() return true end,
-            find_by_position = function() return nil end,
+            find_by_position = function(pos0)
+                if storage_cards[1] and storage_cards[1].highlight_pos0 == pos0 then
+                    return copy_card(storage_cards[1])
+                end
+                return nil
+            end,
             find_by_phrase_fuzzy = function() return nil end,
             load_cards = function() return storage_cards end,
         }
@@ -416,11 +445,12 @@ local function reset_main(card_results, options)
         annotation = { annotations = {} },
         document = { getProps = function() return { title = "Book", authors = "Author" } end },
     }
+    highlight.ui = plugin.ui
     plugin:init()
     assert(entries.ankiflashcards_4, "Anki Card entry was not registered")
     return entries.ankiflashcards_4({
         selected_text = { text = "anchor", pos0 = "p0", pos1 = "p1" }, saveHighlight = function() end,
-    })
+    }), plugin, highlight
 end
 
 local action = reset_main({ { phrase = "anchor", definition = "first" }, { phrase = "anchored", definition = "replacement" } })
@@ -430,6 +460,64 @@ assert(#storage_cards == 1 and storage_cards[1].book_title == "Book", "initial g
 viewers[#viewers].on_regenerate()
 assert(#storage_cards == 1 and storage_cards[1].phrase == "anchored", "regeneration must replace, not duplicate")
 assert(storage_cards[1].highlight_pos0 == "p0" and storage_cards[1].highlight_pos1 == "p1", "regeneration must retain highlight metadata")
+
+-- Existing document highlights use a separate viewer path. Its edits must target
+-- the saved generation, survive reopening the highlight, and persist its IPA
+-- refresh without redrawing a viewer that is no longer visible.
+local function open_saved_highlight(saved_card, options)
+    options = options or {}
+    options.saved_highlight_card = saved_card
+    local _action, plugin, highlight = reset_main({}, options)
+    plugin.ui.annotation.annotations[1] = {
+        pos0 = saved_card.highlight_pos0, pos1 = saved_card.highlight_pos1, text = saved_card.phrase,
+    }
+    highlight.view = {
+        highlight = { visible_boxes = {{ rect = { x = 0, y = 0, w = 100, h = 100 }, index = 1 }} },
+        screenToPageTransform = function(_, pos) return pos end,
+    }
+    assert(highlight:onTap(nil, { pos = { x = 1, y = 1 } }), "saved highlight tap must open its card viewer")
+    return viewers[#viewers]
+end
+
+local saved_highlight = {
+    phrase = "anchor", definition = "original", ipa = "/old/",
+    highlight_pos0 = "saved-p0", highlight_pos1 = "saved-p1",
+}
+local highlight_viewer = open_saved_highlight(saved_highlight, { ipa_results = { "/edited/" } })
+highlight_viewer.card.phrase = "edited"
+highlight_viewer.card.definition = "persisted edit"
+local edited_ok, edited_err = highlight_viewer.on_update(highlight_viewer.card)
+assert(edited_ok and not edited_err, "saved-highlight edit must persist")
+assert(storage_cards[1].phrase == "edited" and storage_cards[1].definition == "persisted edit",
+       "saved-highlight edit was not durable")
+highlight_viewer.on_regen_ipa("edited", highlight_viewer.card, highlight_viewer)
+assert(storage_cards[1].ipa == "/edited/", "saved-highlight IPA regeneration must persist")
+assert(#viewer_updates == 1 and viewer_updates[1].viewer == highlight_viewer,
+       "saved-highlight IPA regeneration must redraw only its visible viewer")
+-- Reopen by its unchanged highlight identity, not its old phrase.
+assert(highlight_viewer.on_highlight_dialog, "saved highlight navigation must remain available")
+local reopened_viewer = open_saved_highlight(storage_cards[1])
+assert(reopened_viewer.card.definition == "persisted edit" and reopened_viewer.card.ipa == "/edited/",
+       "reopened saved highlight must read the persisted edit and IPA")
+
+for _, failure in ipairs({ "write_failed", "already_saved" }) do
+    local failing_viewer = open_saved_highlight(saved_highlight, {
+        update_card_fails = true, update_error = failure,
+    })
+    failing_viewer.card.phrase = "conflicting phrase"
+    local saved, save_err = failing_viewer.on_update(failing_viewer.card)
+    assert(not saved and save_err == failure,
+           "saved-highlight edit must surface its " .. failure .. " persistence failure")
+    assert(storage_cards[1].phrase == "anchor" and storage_cards[1].definition == "original",
+           "failed saved-highlight edit must not mutate durable storage")
+end
+
+-- A stale IPA result may still persist after a viewer closes, but must not
+-- recreate/redraw a viewer that is no longer on screen.
+local closed_viewer = open_saved_highlight(saved_highlight, { ipa_results = { "/closed/" } })
+local offscreen = { update = function() error("offscreen viewer must not redraw") end }
+closed_viewer.on_regen_ipa("anchor", closed_viewer.card, offscreen)
+assert(storage_cards[1].ipa == "/closed/", "offscreen saved-highlight IPA refresh must still persist")
 
 -- Late callbacks from the pre-regeneration generation must not mutate storage
 -- or redraw the replacement viewer. The replacement starts its own image and
@@ -548,8 +636,8 @@ assert(#viewers == 2 and viewers[#viewers].card.text == "old" and viewers[#viewe
 assert(storage_cards[1].text == "old" and storage_cards[1].image_prompt == "old prompt",
        "failed sentence persistence must not mutate in-memory or stored card state")
 
--- Exercise the real viewer's back-side action row with lightweight KOReader mocks.
-local rendered_buttons
+-- Exercise the real viewer's back-side action row and edit-failure rollback with lightweight KOReader mocks.
+local rendered_buttons, last_input_dialog, last_info_text, viewer_input_value
 package.loaded["card_viewer"] = nil
 package.preload["card_viewer"] = nil
 for _, name in ipairs({
@@ -572,7 +660,16 @@ package.preload["device"] = function()
              hasKeys = function() return false end, isTouchDevice = function() return false end }
 end
 package.preload["gettext"] = function() return function(s) return s end end
-package.preload["ui/uimanager"] = function() return { show = function() end, close = function() end, scheduleIn = function(_, _, callback) callback() end } end
+package.preload["ui/uimanager"] = function()
+    return {
+        show = function(_, widget)
+            if widget.getInputText then last_input_dialog = widget
+            elseif widget.text then last_info_text = widget.text end
+        end,
+        close = function() end,
+        scheduleIn = function(_, _, callback) callback() end,
+    }
+end
 package.preload["ui/bidi"] = function() return {} end
 package.preload["ui/rendertext"] = function() return {} end
 package.preload["ffi/blitbuffer"] = function() return { COLOR_WHITE = 1, COLOR_BLACK = 0, ColorRGB32 = function() return 0 end } end
@@ -605,12 +702,34 @@ for _, name in ipairs({
 }) do
     package.preload[name] = function() return { new = function(_, options) return widget(options) end } end
 end
+package.preload["ui/widget/inputdialog"] = function()
+    return { new = function(_, options)
+        options.getInputText = function() return viewer_input_value end
+        options.onShowKeyboard = function() end
+        return widget(options)
+    end }
+end
 local RealCardViewer = require("card_viewer")
 RealCardViewer:new { card = { phrase = "anchor" }, show_back = true }
 assert(rendered_buttons, "CardViewer did not build an action row")
 for _, button in ipairs(rendered_buttons) do
     assert(not tostring(button.text):find("Save", 1, true), "Save button must not be rendered")
 end
+
+local failing_card = { phrase = "anchor", definition = "original", ipa = "/old/" }
+local failing_viewer = RealCardViewer:new {
+    card = failing_card,
+    show_back = true,
+    on_update = function() return false, "already_saved" end,
+}
+viewer_input_value = "duplicate"
+failing_viewer:editField({ key = "phrase", label = "Phrase" })
+assert(last_input_dialog and last_input_dialog.buttons[1][2], "CardViewer edit dialog was not shown")
+last_input_dialog.buttons[1][2].callback()
+assert(failing_card.phrase == "anchor" and failing_card.ipa == "/old/",
+       "CardViewer must restore in-memory state after a failed persisted edit")
+assert(last_info_text == "A card with this phrase is already saved",
+       "CardViewer must display the duplicate edit failure")
 
 local function read(path)
     local file = assert(io.open(path, "r"))

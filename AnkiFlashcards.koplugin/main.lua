@@ -747,6 +747,41 @@ function AnkiFlashcards:init()
                                     end
                                     return ok, err
                                 end,
+                                on_update = function(updated_card)
+                                    -- Use the saved card's stable identity so editing a phrase
+                                    -- cannot retarget a different same-phrase record.
+                                    return CardStorage.update_card(card, updated_card)
+                                end,
+                                on_regen_ipa = function(new_phrase, updated_card, new_viewer)
+                                    NetworkMgr:runWhenOnline(function()
+                                        UIManager:scheduleIn(0.05, function()
+                                            local ipa, err = CardGenerator.generate_ipa(CONFIGURATION, new_phrase)
+                                            if ipa then
+                                                -- A later phrase edit supersedes this response.
+                                                if updated_card.phrase ~= new_phrase then return end
+                                                updated_card.ipa = ipa
+                                                if not CardStorage.update_card(updated_card, updated_card) then
+                                                    UIManager:show(InfoMessage:new {
+                                                        text = _("Could not save IPA update"), timeout = 5,
+                                                    })
+                                                    return
+                                                end
+                                                -- The edit may have closed, navigated, or replaced
+                                                -- this viewer while IPA generation was pending.
+                                                local still_shown = false
+                                                for w in UIManager:topdown_widgets_iter() do
+                                                    if w == new_viewer then still_shown = true; break end
+                                                end
+                                                if still_shown then new_viewer:update() end
+                                                UIManager:show(Notification:new { text = _("IPA updated") })
+                                            else
+                                                UIManager:show(InfoMessage:new {
+                                                    text = _("IPA regen failed: ") .. (err or "unknown"), timeout = 5,
+                                                })
+                                            end
+                                        end)
+                                    end)
+                                end,
                                 on_regen_image = ImageGenerator.images_enabled(CONFIGURATION) and function()
                                     if not card.image_prompt or card.image_prompt == "" then
                                         UIManager:show(Notification:new {
