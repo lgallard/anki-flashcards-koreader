@@ -74,7 +74,6 @@ local CardViewer = InputContainer:extend {
     card           = nil,   -- card table: { phrase, ipa, definition, synonyms, text, source, image_path, … }
     show_back      = false, -- false = front (question), true = back (answer)
     on_show_answer = nil,   -- function() — called when user flips to back
-    on_save        = nil,   -- function() -> true | nil, err
     on_send        = nil,   -- function() -> true | nil, err
     on_regenerate  = nil,   -- function()
     on_update      = nil,   -- function(card) — called after a field edit (to persist)
@@ -154,26 +153,6 @@ function CardViewer:init()
                 callback = function() self:showEditDialog() end,
             })
         end
-
-        local CardStorage   = require("card_storage")
-        local already_saved = self.card and CardStorage.is_saved(self.card.phrase or "")
-        table.insert(buttons_row, {
-            id      = "save",
-            text    = already_saved and _("✓ Saved") or _("★ Save"),
-            enabled = not already_saved,
-            callback = function()
-                if self.on_save then
-                    local ok, err = self.on_save()
-                    if ok then
-                        UIManager:show(Notification:new { text = _("Saved!") })
-                        local btn = self.button_table:getButtonById("save")
-                        if btn then btn:disable(); btn:refresh() end
-                    else
-                        UIManager:show(InfoMessage:new { text = err or _("Could not save"), timeout = 5 })
-                    end
-                end
-            end,
-        })
 
         table.insert(buttons_row, {
             text     = _("→ Anki"),
@@ -522,7 +501,6 @@ function CardViewer:update(new_card, new_show_back)
         card                  = card,
         show_back             = show_back,
         on_show_answer        = self.on_show_answer,
-        on_save               = self.on_save,
         on_send               = self.on_send,
         on_regenerate         = self.on_regenerate,
         on_update             = self.on_update,

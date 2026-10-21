@@ -397,6 +397,16 @@ function AnkiFlashcards:init()
                     card.highlight_pos0 = highlight_pos0
                     card.highlight_pos1 = highlight_pos1
 
+                    -- A generated card is a local card before it is displayed.
+                    local saved, save_err = CardStorage.save_card(card)
+                    if not saved then
+                        UIManager:show(InfoMessage:new {
+                            text    = _("Could not save generated card: ") .. (save_err or "unknown"),
+                            timeout = 5,
+                        })
+                        return
+                    end
+
                     -- Keep _audio_url so AnkiConnect can download and attach
                     -- the server-generated audio when sending to Anki.
 
@@ -420,21 +430,13 @@ function AnkiFlashcards:init()
                                 viewer_ref[1] = nv
                             end,
 
-                            on_save = function()
-                                local ok2, save_err = CardStorage.save_card(c)
-                                if ok2 then
-                                    return true
-                                else
-                                    local msg = (save_err == "already_saved")
-                                                and _("Already saved")
-                                                or  _("Could not save")
-                                    return nil, msg
-                                end
+                            on_update = function(updated_card)
+                                CardStorage.update_card(c, updated_card)
                             end,
 
                             on_send = function()
                                 local ok, err = AnkiSync.send_card(get_anki_config(), c, CONFIGURATION)
-                                if ok then CardStorage.save_card(c) end
+                                if ok then CardStorage.mark_sent(c.phrase) end
                                 return ok, err
                             end,
 
@@ -464,6 +466,14 @@ function AnkiFlashcards:init()
                                     new_card.book_author    = author
                                     new_card.highlight_pos0 = highlight_pos0
                                     new_card.highlight_pos1 = highlight_pos1
+                                    local replaced, replace_err = CardStorage.replace_card(c, new_card)
+                                    if not replaced then
+                                        UIManager:show(InfoMessage:new {
+                                            text    = _("Could not replace generated card: ") .. (replace_err or "unknown"),
+                                            timeout = 5,
+                                        })
+                                        return
+                                    end
                                     -- Regenerated card starts on front again.
                                     local nv = make_viewer(new_card, false)
                                     viewer_ref[1] = nv
@@ -476,7 +486,7 @@ function AnkiFlashcards:init()
                                             new_card.phrase,
                                             function(img_path)
                                                 new_card.image_path = img_path
-                                                CardStorage.update_image_path(new_card.phrase, img_path)
+                                                CardStorage.update_image_path(new_card, img_path)
                                                 if viewer_ref[1] then
                                                     local nv2 = viewer_ref[1]:update(new_card)
                                                     viewer_ref[1] = nv2
@@ -518,7 +528,7 @@ function AnkiFlashcards:init()
                                                 c.phrase,
                                                 function(img_path)
                                                     c.image_path = img_path
-                                                    CardStorage.update_image_path(c.phrase, img_path)
+                                                    CardStorage.update_image_path(c, img_path)
                                                     if viewer_ref[1] then
                                                         viewer_ref[1] = viewer_ref[1]:update(c)
                                                     end
@@ -553,7 +563,7 @@ function AnkiFlashcards:init()
                                             os.remove(old_image)
                                         end
                                         c.image_path = img_path
-                                        CardStorage.update_image_path(c.phrase, img_path)
+                                        CardStorage.update_image_path(c, img_path)
                                         if viewer_ref[1] then
                                             viewer_ref[1] = viewer_ref[1]:update(c)
                                         end
@@ -590,7 +600,7 @@ function AnkiFlashcards:init()
                             card.phrase,
                             function(img_path)
                                 card.image_path = img_path
-                                CardStorage.update_image_path(card.phrase, img_path)
+                                CardStorage.update_image_path(card, img_path)
                                 -- Refresh whichever side is showing.
                                 if viewer_ref[1] then
                                     local nv = viewer_ref[1]:update(card)
@@ -610,7 +620,7 @@ function AnkiFlashcards:init()
                             card._ankivocab_word,
                             function(audio_url)
                                 card._audio_url = audio_url
-                                CardStorage.update_audio_url(card.phrase, audio_url)
+                                CardStorage.update_audio_url(card, audio_url)
                             end,
                             nil  -- audio polling errors are non-fatal
                         )
@@ -702,9 +712,6 @@ function AnkiFlashcards:init()
                                     UIManager:close(cur)
                                     viewer_ref[1] = make_viewer(true)
                                 end,
-                                on_save = function()
-                                    return nil, _("Already saved")
-                                end,
                                 on_send = function()
                                     return AnkiSync.send_card(get_anki_config(), card, CONFIGURATION)
                                 end,
@@ -730,7 +737,7 @@ function AnkiFlashcards:init()
                                                 os.remove(old_image)
                                             end
                                             card.image_path = img_path
-                                            CardStorage.update_image_path(card.phrase, img_path)
+                                            CardStorage.update_image_path(card, img_path)
                                             if viewer_ref[1] then
                                                 viewer_ref[1] = viewer_ref[1]:update(card)
                                             end
@@ -766,7 +773,7 @@ function AnkiFlashcards:init()
                                 card.phrase,
                                 function(img_path)
                                     card.image_path = img_path
-                                    CardStorage.update_image_path(card.phrase, img_path)
+                                    CardStorage.update_image_path(card, img_path)
                                     if viewer_ref[1] then
                                         viewer_ref[1] = viewer_ref[1]:update(card)
                                     end

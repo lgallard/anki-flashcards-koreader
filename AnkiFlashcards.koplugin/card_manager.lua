@@ -463,9 +463,6 @@ function CardManager.show(base_config, filter_book, ui)
                         UIManager:close(cur)
                         viewer_ref[1] = make_viewer(true)
                     end,
-                    on_save = function()
-                        return nil, _("Already saved")
-                    end,
                     on_send = function()
                         return AnkiSync.send_card(anki_config, card, base_config)
                     end,
@@ -508,7 +505,7 @@ function CardManager.show(base_config, filter_book, ui)
                                         card.phrase,
                                         function(img_path)
                                             card.image_path = img_path
-                                            CardStorage.update_image_path(card.phrase, img_path)
+                                            CardStorage.update_image_path(card, img_path)
                                             if viewer_ref[1] then
                                                 viewer_ref[1] = viewer_ref[1]:update(card)
                                             end
@@ -535,7 +532,7 @@ function CardManager.show(base_config, filter_book, ui)
                                     os.remove(old_image)
                                 end
                                 card.image_path = img_path
-                                CardStorage.update_image_path(card.phrase, img_path)
+                                CardStorage.update_image_path(card, img_path)
                                 if viewer_ref[1] then
                                     viewer_ref[1] = viewer_ref[1]:update(card)
                                 end
@@ -594,7 +591,7 @@ function CardManager.show(base_config, filter_book, ui)
                     card.phrase,
                     function(img_path)
                         card.image_path = img_path
-                        CardStorage.update_image_path(card.phrase, img_path)
+                        CardStorage.update_image_path(card, img_path)
                         if viewer_ref[1] then
                             viewer_ref[1] = viewer_ref[1]:update(card)
                         end

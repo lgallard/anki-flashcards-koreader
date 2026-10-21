@@ -126,7 +126,7 @@ local function show_menu(ui, config, highlights, already_carded, selected)
                                 config, card.image_prompt, card.phrase,
                                 function(img_path)
                                     card.image_path = img_path
-                                    CardStorage.update_image_path(card.phrase, img_path)
+                                    CardStorage.update_image_path(card, img_path)
                                 end,
                                 nil
                             )

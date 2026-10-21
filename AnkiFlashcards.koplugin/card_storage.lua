@@ -72,6 +72,46 @@ local function save_raw(entries)
     return true
 end
 
+local function new_storage_id(entries)
+    local prefix = tostring(os.time()) .. "-"
+    local suffix = math.random(1, 2147483646)
+    local id = prefix .. suffix
+    local exists = true
+    while exists do
+        exists = false
+        for _, entry in ipairs(entries) do
+            if entry._storage_id == id then
+                exists = true
+                suffix = suffix + 1
+                id = prefix .. suffix
+                break
+            end
+        end
+    end
+    return id
+end
+
+-- Prefer a stable per-generation identity when available. Phrase is retained as
+-- a fallback for cards written before identities were introduced.
+local function find_entry(entries, target)
+    if type(target) == "table" and target._storage_id then
+        for _, entry in ipairs(entries) do
+            if entry._storage_id == target._storage_id then
+                return entry
+            end
+        end
+        return nil
+    end
+    local phrase = type(target) == "table" and target.phrase or target
+    local key = normalize(phrase)
+    for _, entry in ipairs(entries) do
+        if normalize(entry.phrase) == key then
+            return entry
+        end
+    end
+    return nil
+end
+
 -- Save a new card. Returns true on success or false + reason string.
 function CardStorage.save_card(card)
     local key     = normalize(card.phrase)
@@ -81,26 +121,30 @@ function CardStorage.save_card(card)
             return false, "already_saved"
         end
     end
-    table.insert(entries, {
-        phrase      = card.phrase      or "",
-        ipa         = card.ipa         or "",
-        definition  = card.definition  or "",
-        synonyms    = card.synonyms    or "",
-        text        = card.text        or "",
-        source      = card.source      or "",
-        book_title  = card.book_title  or "",
-        book_author = card.book_author or "",
-        image_path     = card.image_path    or "",
-        image_prompt   = card.image_prompt  or "",
-        _audio_url       = card._audio_url       or "",
-        _ankivocab_word  = card._ankivocab_word  or "",
+    local entry = {
+        _storage_id    = new_storage_id(entries),
+        phrase         = card.phrase         or "",
+        ipa            = card.ipa            or "",
+        definition     = card.definition     or "",
+        synonyms       = card.synonyms       or "",
+        text           = card.text           or "",
+        source         = card.source         or "",
+        book_title     = card.book_title     or "",
+        book_author    = card.book_author    or "",
+        image_path     = card.image_path     or "",
+        image_prompt   = card.image_prompt   or "",
+        _audio_url     = card._audio_url     or "",
+        _ankivocab_word = card._ankivocab_word or "",
         highlight_pos0 = card.highlight_pos0,
         highlight_pos1 = card.highlight_pos1,
         date           = os.date("%Y-%m-%d"),
         updated_at     = os.time(),
         sent_to_anki   = false,
-    })
-    save_raw(entries)
+    }
+    table.insert(entries, entry)
+    if not save_raw(entries) then return false, "write_failed" end
+    card._storage_id = entry._storage_id
+    card.sent_to_anki = entry.sent_to_anki
     return true
 end
 
@@ -202,53 +246,83 @@ function CardStorage.export_cards(cards, format)
 end
 
 -- Update image_path on an already-saved card (called after async generation).
-function CardStorage.update_image_path(phrase, path)
-    local key     = normalize(phrase)
+-- target may be a card table, so delayed work follows its generation identity
+-- instead of a phrase that may have been edited or regenerated.
+function CardStorage.update_image_path(target, path)
     local entries = load_raw()
-    for _, e in ipairs(entries) do
-        if normalize(e.phrase) == key then
-            e.image_path = path
-            save_raw(entries)
-            return true
-        end
+    local e = find_entry(entries, target)
+    if e then
+        e.image_path = path
+        return save_raw(entries)
     end
     return false
 end
 
 -- Update _audio_url on an already-saved card (called after async polling).
-function CardStorage.update_audio_url(phrase, url)
-    local key     = normalize(phrase)
+function CardStorage.update_audio_url(target, url)
     local entries = load_raw()
-    for _, e in ipairs(entries) do
-        if normalize(e.phrase) == key then
-            e._audio_url = url
-            save_raw(entries)
-            return true
-        end
+    local e = find_entry(entries, target)
+    if e then
+        e._audio_url = url
+        return save_raw(entries)
     end
     return false
 end
 
--- Update editable fields of an already-saved card (matched by original phrase).
--- Does not touch book metadata, image_path, date or sent_to_anki.
-function CardStorage.update_card(original_phrase, new_card)
-    local key     = normalize(original_phrase)
+-- Update editable fields of an already-saved card (matched by original phrase
+-- or stable identity). Does not touch book metadata, image_path, date or sent_to_anki.
+function CardStorage.update_card(target, new_card)
     local entries = load_raw()
-    for _, e in ipairs(entries) do
-        if normalize(e.phrase) == key then
-            e.phrase       = new_card.phrase       or ""
-            e.ipa          = new_card.ipa          or ""
-            e.definition   = new_card.definition   or ""
-            e.synonyms     = new_card.synonyms     or ""
-            e.text         = new_card.text         or ""
-            e.source       = new_card.source       or ""
-            e.image_prompt = new_card.image_prompt or e.image_prompt or ""
-            e.updated_at   = os.time()
-            save_raw(entries)
-            return true
-        end
+    local e = find_entry(entries, target)
+    if e then
+        if not e._storage_id then e._storage_id = new_storage_id(entries) end
+        e.phrase       = new_card.phrase       or ""
+        e.ipa          = new_card.ipa          or ""
+        e.definition   = new_card.definition   or ""
+        e.synonyms     = new_card.synonyms     or ""
+        e.text         = new_card.text         or ""
+        e.source       = new_card.source       or ""
+        e.image_prompt = new_card.image_prompt or e.image_prompt or ""
+        e.updated_at   = os.time()
+        new_card._storage_id = e._storage_id
+        new_card.sent_to_anki = e.sent_to_anki
+        return save_raw(entries)
     end
     return false
+end
+
+-- Replace a saved card after a full regeneration. The replacement deliberately
+-- gets a new identity so delayed image/audio callbacks for the previous
+-- generation cannot overwrite it. Local metadata and Anki send state survive.
+function CardStorage.replace_card(target, new_card)
+    local entries = load_raw()
+    local e = find_entry(entries, target)
+    if not e then return false, "not_saved" end
+
+    local sent_to_anki = e.sent_to_anki
+    local date = e.date
+    e._storage_id     = new_storage_id(entries)
+    e.phrase          = new_card.phrase          or ""
+    e.ipa             = new_card.ipa             or ""
+    e.definition      = new_card.definition      or ""
+    e.synonyms        = new_card.synonyms        or ""
+    e.text            = new_card.text            or ""
+    e.source          = new_card.source          or ""
+    e.book_title      = new_card.book_title      or e.book_title or ""
+    e.book_author     = new_card.book_author     or e.book_author or ""
+    e.image_path      = new_card.image_path      or ""
+    e.image_prompt    = new_card.image_prompt    or ""
+    e._audio_url      = new_card._audio_url      or ""
+    e._ankivocab_word = new_card._ankivocab_word or ""
+    e.highlight_pos0  = new_card.highlight_pos0 ~= nil and new_card.highlight_pos0 or e.highlight_pos0
+    e.highlight_pos1  = new_card.highlight_pos1 ~= nil and new_card.highlight_pos1 or e.highlight_pos1
+    e.date            = date
+    e.updated_at      = os.time()
+    e.sent_to_anki    = sent_to_anki
+    if not save_raw(entries) then return false, "write_failed" end
+    new_card._storage_id = e._storage_id
+    new_card.sent_to_anki = sent_to_anki
+    return true
 end
 
 -- Remove card by 1-based index; also deletes its image file if present.
