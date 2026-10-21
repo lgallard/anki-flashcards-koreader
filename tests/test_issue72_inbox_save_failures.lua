@@ -7,8 +7,10 @@ local function copy_card(card)
     return copy
 end
 
-local function run_case(save_result, save_error, assign_storage_id)
-    local menu, notifications, image_calls, image_updates = nil, {}, 0, 0
+local function run_case(save_result, save_error, assign_storage_id, options)
+    options = options or {}
+    local menu, notifications, image_calls, image_updates, cleanup_paths = nil, {}, 0, 0, {}
+    local saved_card
     package.loaded["highlight_inbox"] = nil
     for _, name in ipairs({
         "ui/network/manager", "ui/widget/menu", "ui/widget/notification",
@@ -47,6 +49,7 @@ local function run_case(save_result, save_error, assign_storage_id)
         return {
             load_cards = function() return {} end,
             save_card = function(card)
+                saved_card = card
                 if save_result and assign_storage_id then card._storage_id = "saved-generation" end
                 return save_result, save_error
             end,
@@ -54,7 +57,11 @@ local function run_case(save_result, save_error, assign_storage_id)
                 assert(card._storage_id == "saved-generation", "async update must target a saved identity")
                 assert(path == "/tmp/inbox-image.png", "unexpected image path")
                 image_updates = image_updates + 1
-                return true
+                return not options.update_image_fails
+            end,
+            remove_image_if_unreferenced = function(path)
+                cleanup_paths[#cleanup_paths + 1] = path
+                return false
             end,
         }
     end
@@ -63,6 +70,9 @@ local function run_case(save_result, save_error, assign_storage_id)
             images_enabled = function() return true end,
             generate_async = function(_, _, _, on_success)
                 image_calls = image_calls + 1
+                if options.invalidate_before_callback then
+                    saved_card._storage_id = "replacement-generation"
+                end
                 on_success("/tmp/inbox-image.png")
             end,
         }
@@ -75,7 +85,7 @@ local function run_case(save_result, save_error, assign_storage_id)
     }, { images_enabled = true })
     assert(menu and menu.item_table[1], "inbox menu was not rendered")
     menu.item_table[1].callback()
-    return image_calls, image_updates, notifications[#notifications]
+    return image_calls, image_updates, notifications[#notifications], cleanup_paths
 end
 
 local images, updates, summary = run_case(false, "already_saved", false)
@@ -93,5 +103,15 @@ assert(summary == "0 card(s) saved, 1 failed", "missing identity must not count 
 images, updates, summary = run_case(true, nil, true)
 assert(images == 1 and updates == 1, "successfully saved inbox card must retain image generation behavior")
 assert(summary == "1 card(s) saved", "successful inbox summary changed: " .. tostring(summary))
+
+images, updates, summary, cleanup_paths = run_case(true, nil, true, { update_image_fails = true })
+assert(images == 1 and updates == 1, "failed image persistence must still attempt the saved generation update")
+assert(#cleanup_paths == 1 and cleanup_paths[1] == "/tmp/inbox-image.png",
+       "failed image persistence must use reference-safe cleanup")
+
+images, updates, summary, cleanup_paths = run_case(true, nil, true, { invalidate_before_callback = true })
+assert(images == 1 and updates == 0, "stale inbox callback must not update a replacement generation")
+assert(#cleanup_paths == 1 and cleanup_paths[1] == "/tmp/inbox-image.png",
+       "stale inbox callback must use reference-safe cleanup")
 
 print("issue #72 inbox save failures: PASS")

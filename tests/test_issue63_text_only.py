@@ -215,6 +215,7 @@ package.preload["card_storage"] = function()
     return {
         load_anki_settings = function() return nil end,
         save_card = function() return true end,
+        update_card = function() return true end,
         update_image_path = function() end,
         update_audio_url = function() end,
         find_by_position = function() return { phrase = "saved", text = "{{c1::saved}} card" } end,

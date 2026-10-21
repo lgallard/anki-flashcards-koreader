@@ -48,11 +48,11 @@ local function start_image_request(config, card)
         config, card.image_prompt, card.phrase,
         function(img_path)
             if card._storage_id ~= storage_id then
-                if img_path then os.remove(img_path) end
+                CardStorage.remove_image_if_unreferenced(img_path)
                 return
             end
             if not CardStorage.update_image_path(card, img_path) then
-                if img_path then os.remove(img_path) end
+                CardStorage.remove_image_if_unreferenced(img_path)
                 return
             end
             card.image_path = img_path
