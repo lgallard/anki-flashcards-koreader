@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0](https://github.com/lgallard/anki-flashcards-koreader/compare/v1.1.0...v1.2.0) (2026-10-21)
+
+
+### Features
+
+* export saved cards as CSV or TSV ([1ad38a4](https://github.com/lgallard/anki-flashcards-koreader/commit/1ad38a423aecbe9d085c8943251b33b636dd106f))
+* export saved cards as CSV or TSV ([55842a7](https://github.com/lgallard/anki-flashcards-koreader/commit/55842a72a5dfb3415a2f022817c56746f030f799))
+
+
+### Bug Fixes
+
+* handle card export write failures ([3725971](https://github.com/lgallard/anki-flashcards-koreader/commit/37259714ce7ee7a80d8c2e4b7b15e81219af087d))
+* harden card exports ([f2b6f97](https://github.com/lgallard/anki-flashcards-koreader/commit/f2b6f975b97a9fbdb81e3ccb75c51aa4122dbc29))
+* separate missing-book export bucket ([e6b2cd5](https://github.com/lgallard/anki-flashcards-koreader/commit/e6b2cd5589886e7d652ca0215c0569da15ab7635))
+
 ## [1.1.0](https://github.com/lgallard/anki-flashcards-koreader/compare/v1.0.0...v1.1.0) (2026-10-17)
 
 
