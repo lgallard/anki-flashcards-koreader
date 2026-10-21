@@ -364,15 +364,20 @@ function CardStorage.replace_card(target, new_card)
     return true
 end
 
--- Remove card by 1-based index; also deletes its image file if present.
+-- Remove card by 1-based index. Persist the revised list before deleting its
+-- image so a failed write cannot leave a saved card pointing at a missing asset.
 function CardStorage.delete_card(idx)
     local entries = load_raw()
     local card    = entries[idx]
-    if card and card.image_path and card.image_path ~= "" then
+    if not card then return false, "not_saved" end
+
+    table.remove(entries, idx)
+    if not save_raw(entries) then return false, "write_failed" end
+
+    if card.image_path and card.image_path ~= "" then
         os.remove(card.image_path)
     end
-    table.remove(entries, idx)
-    save_raw(entries)
+    return true
 end
 
 -- Empty the entire card list and delete all associated image files.

@@ -629,8 +629,12 @@ function CardManager.show(base_config, filter_book, ui)
                             text        = _("Delete '") .. (card.phrase or "") .. _("'?"),
                             ok_text     = _("Delete"),
                             ok_callback = function()
-                                CardStorage.delete_card(idx)
-                                refresh()
+                                local deleted = CardStorage.delete_card(idx)
+                                if deleted then
+                                    refresh()
+                                else
+                                    notify_error(_("Could not delete card: local persistence failed"))
+                                end
                             end,
                         })
                     end }},
