@@ -233,4 +233,76 @@ do
            "saved-card sentence save failure must not mutate the live card")
 end
 
+-- Two rapid phrase edits in the My Cards viewer start two IPA requests.  The
+-- first response must not overwrite or persist against the second phrase.
+do
+    local shown, viewer_options, scheduled, ipa_update_calls = {}, nil, {}, 0
+    for _, name in ipairs({
+        "card_manager", "gettext", "ui/widget/buttondialog", "ui/widget/confirmbox", "ui/widget/menu",
+        "ui/widget/notification", "ui/widget/infomessage", "ui/uimanager", "ui/event", "card_storage",
+        "anki_sync", "card_generator", "card_viewer", "image_generator", "ui/network/manager", "settings_viewer",
+    }) do package.loaded[name] = nil end
+    package.preload["gettext"] = function() return function(s) return s end end
+    for _, name in ipairs({ "ui/widget/buttondialog", "ui/widget/confirmbox", "ui/widget/menu",
+                            "ui/widget/notification", "ui/widget/infomessage" }) do
+        package.preload[name] = function() return { new = function(_, options) return options end } end
+    end
+    package.preload["ui/uimanager"] = function()
+        return {
+            show = function(_, widget) shown[#shown + 1] = widget end,
+            close = function() end, setDirty = function() end,
+            scheduleIn = function(_, _, callback) scheduled[#scheduled + 1] = callback end,
+            topdown_widgets_iter = function() return function() return nil end end,
+        }
+    end
+    package.preload["ui/event"] = function() return {} end
+    local card = { phrase = "anchor", ipa = "/old/", _storage_id = "saved-id" }
+    package.preload["card_storage"] = function()
+        return {
+            load_anki_settings = function() return nil end,
+            load_cards = function() return { card } end,
+            ensure_identity = function(target) return target._storage_id == "saved-id" end,
+            update_card = function(_, candidate)
+                if candidate.ipa == "/first/" or candidate.ipa == "/second/" then
+                    ipa_update_calls = ipa_update_calls + 1
+                end
+                return true
+            end,
+            mark_sent = function() return true end,
+        }
+    end
+    package.preload["anki_sync"] = function() return { send_card = function() return true end } end
+    package.preload["card_generator"] = function()
+        return { generate_ipa = function(_, phrase) return phrase == "first edit" and "/first/" or "/second/" end }
+    end
+    package.preload["card_viewer"] = function()
+        return { new = function(_, options) viewer_options = options; return options end }
+    end
+    package.preload["image_generator"] = function() return { images_enabled = function() return false end } end
+    package.preload["ui/network/manager"] = function()
+        return { runWhenOnline = function(_, callback) callback() end, isOnline = function() return true end }
+    end
+    package.preload["settings_viewer"] = function() return { show = function() end } end
+
+    local manager = require("card_manager")
+    manager.show({})
+    shown[#shown].item_table[2].callback()
+    assert(viewer_options, "My Cards must open a card viewer")
+
+    viewer_options.card.phrase, viewer_options.card.ipa = "first edit", ""
+    assert(viewer_options.on_update(viewer_options.card), "first phrase edit must persist")
+    viewer_options.on_regen_ipa("first edit", viewer_options.card, viewer_options)
+    viewer_options.card.phrase, viewer_options.card.ipa = "second edit", ""
+    assert(viewer_options.on_update(viewer_options.card), "second phrase edit must persist")
+    viewer_options.on_regen_ipa("second edit", viewer_options.card, viewer_options)
+    assert(#scheduled == 2, "two rapid phrase edits must retain both IPA callbacks")
+
+    scheduled[1]()
+    assert(card.phrase == "second edit" and card.ipa == "" and ipa_update_calls == 0,
+           "stale first IPA response must not overwrite or persist against the second phrase")
+    scheduled[2]()
+    assert(card.phrase == "second edit" and card.ipa == "/second/" and ipa_update_calls == 1,
+           "current second IPA response must persist exactly once")
+end
+
 print("issue #72 delete-card harness: PASS")

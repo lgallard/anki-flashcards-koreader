@@ -585,6 +585,8 @@ function CardManager.show(base_config, filter_book, ui)
                             UIManager:scheduleIn(0.05, function()
                                 local ipa, err = CardGenerator.generate_ipa(base_config, new_phrase)
                                 if ipa then
+                                    -- A later phrase edit supersedes this response.
+                                    if updated_card.phrase ~= new_phrase then return end
                                     updated_card.ipa = ipa
                                     if not CardStorage.update_card(updated_card, updated_card) then
                                         notify_error(_("Could not save IPA update"))
