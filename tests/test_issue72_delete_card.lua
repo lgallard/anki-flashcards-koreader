@@ -256,12 +256,16 @@ do
         }
     end
     package.preload["ui/event"] = function() return {} end
-    local card = { phrase = "anchor", ipa = "/old/", _storage_id = "saved-id" }
+    local card = { phrase = "anchor", ipa = "/old/" }
     package.preload["card_storage"] = function()
         return {
             load_anki_settings = function() return nil end,
             load_cards = function() return { card } end,
-            ensure_identity = function(target) return target._storage_id == "saved-id" end,
+            ensure_identity = function(target)
+                if target._storage_id then return true end
+                if target.phrase == "anchor" then target._storage_id = "legacy-id"; return true end
+                return false
+            end,
             update_card = function(_, candidate)
                 if candidate.ipa == "/first/" or candidate.ipa == "/second/" then
                     ipa_update_calls = ipa_update_calls + 1
@@ -288,6 +292,10 @@ do
     manager.show({})
     shown[#shown].item_table[2].callback()
     assert(viewer_options, "My Cards must open a card viewer")
+    assert(viewer_options.on_prepare_update(viewer_options.card),
+           "My Cards must migrate a legacy identity before phrase mutation")
+    assert(viewer_options.card._storage_id == "legacy-id" and viewer_options.card.phrase == "anchor",
+           "My Cards legacy migration must retain the original phrase before rename")
 
     viewer_options.card.phrase, viewer_options.card.ipa = "first edit", ""
     assert(viewer_options.on_update(viewer_options.card), "first phrase edit must persist")
@@ -303,6 +311,74 @@ do
     scheduled[2]()
     assert(card.phrase == "second edit" and card.ipa == "/second/" and ipa_update_calls == 1,
            "current second IPA response must persist exactly once")
+end
+
+-- A My Cards ordinary edit must invalidate an already-pending image callback
+-- even though the card keeps the same persisted generation.
+do
+    local shown, viewer_options, image_callbacks, audio_callbacks, image_updates, audio_updates = {}, nil, {}, {}, 0, 0
+    for _, name in ipairs({
+        "card_manager", "gettext", "ui/widget/buttondialog", "ui/widget/confirmbox", "ui/widget/menu",
+        "ui/widget/notification", "ui/widget/infomessage", "ui/uimanager", "ui/event", "card_storage",
+        "anki_sync", "card_generator", "card_viewer", "image_generator", "ui/network/manager", "settings_viewer",
+    }) do package.loaded[name] = nil end
+    package.preload["gettext"] = function() return function(s) return s end end
+    for _, name in ipairs({ "ui/widget/buttondialog", "ui/widget/confirmbox", "ui/widget/menu",
+                            "ui/widget/notification", "ui/widget/infomessage" }) do
+        package.preload[name] = function() return { new = function(_, options) return options end } end
+    end
+    package.preload["ui/uimanager"] = function()
+        return { show = function(_, widget) shown[#shown + 1] = widget end, close = function() end,
+                 setDirty = function() end, scheduleIn = function(_, _, callback) callback() end,
+                 topdown_widgets_iter = function() return function() return nil end end }
+    end
+    package.preload["ui/event"] = function() return {} end
+    local card = {
+        phrase = "my old", definition = "first", image_prompt = "old image", _storage_id = "my-id",
+        _audio_status = "pending", _ankivocab_word = "my old",
+    }
+    package.preload["card_storage"] = function()
+        return {
+            load_anki_settings = function() return nil end, load_cards = function() return { card } end,
+            ensure_identity = function(target) return target._storage_id == "my-id" end,
+            update_card = function() return true end, mark_sent = function() return true end,
+            update_image_path = function() image_updates = image_updates + 1; return true end,
+            update_audio_url = function() audio_updates = audio_updates + 1; return true end,
+            remove_image_if_unreferenced = function() end,
+        }
+    end
+    package.preload["anki_sync"] = function() return { send_card = function() return true end } end
+    package.preload["card_generator"] = function() return {} end
+    package.preload["card_viewer"] = function()
+        return { new = function(_, options)
+            options.update = function(self) return self end
+            viewer_options = options
+            return options
+        end }
+    end
+    package.preload["image_generator"] = function()
+        return { images_enabled = function() return true end,
+                 generate_async = function(_, _, _, on_success) image_callbacks[#image_callbacks + 1] = on_success end }
+    end
+    package.preload["ui/network/manager"] = function() return { isOnline = function() return true end } end
+    package.preload["audio_generator"] = function()
+        return { poll_ankivocab_async = function(_, _, on_success)
+            audio_callbacks[#audio_callbacks + 1] = on_success
+        end }
+    end
+    package.preload["settings_viewer"] = function() return { show = function() end } end
+    local manager = require("card_manager")
+    manager.show({})
+    shown[#shown].item_table[2].callback()
+    assert(#image_callbacks == 1 and #audio_callbacks == 1,
+           "My Cards must start pending image and audio callbacks")
+    viewer_options.card.phrase = "my edited"
+    viewer_options.card._ankivocab_word = "my edited"
+    assert(viewer_options.on_update(viewer_options.card), "My Cards ordinary edit must persist")
+    image_callbacks[1]("/tmp/my-cards-stale.png")
+    audio_callbacks[1]("https://audio.example/my-cards-stale.mp3")
+    assert(image_updates == 0 and audio_updates == 0 and not card.image_path and not card._audio_url,
+           "My Cards ordinary edit must reject old image/audio persistence and redraw")
 end
 
 print("issue #72 delete-card harness: PASS")

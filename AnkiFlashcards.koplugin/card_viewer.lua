@@ -76,6 +76,7 @@ local CardViewer = InputContainer:extend {
     on_show_answer = nil,   -- function() — called when user flips to back
     on_send        = nil,   -- function() -> true | nil, err
     on_regenerate  = nil,   -- function()
+    on_prepare_update = nil, -- function(card) -> true | false — capture durable identity before mutation
     on_update      = nil,   -- function(card) — called after a field edit (to persist)
     on_regen_ipa   = nil,   -- function(new_phrase, card, new_viewer) — async IPA regen after phrase change
     on_navigate_to_source = nil, -- function() — jump to highlight position in book
@@ -468,6 +469,18 @@ function CardViewer:editField(field_def)
                         local before = {}
                         for k, v in pairs(self.card) do before[k] = v end
                         local old_phrase = self.card.phrase
+                        -- A phrase edit mutates this card table before on_update runs.
+                        -- Let the owner bind legacy records to a durable identity while
+                        -- the original phrase is still available for migration.
+                        if self.on_prepare_update then
+                            local prepared = self.on_prepare_update(self.card)
+                            if not prepared then
+                                UIManager:show(InfoMessage:new {
+                                    text = _("Could not save card changes"), timeout = 5,
+                                })
+                                return
+                            end
+                        end
                         self.card[field_def.key] = new_val
                         -- When phrase changes: auto-update Cambridge source URL,
                         -- clear stale IPA, then trigger async IPA regeneration.
@@ -521,6 +534,7 @@ function CardViewer:update(new_card, new_show_back)
         on_show_answer        = self.on_show_answer,
         on_send               = self.on_send,
         on_regenerate         = self.on_regenerate,
+        on_prepare_update     = self.on_prepare_update,
         on_update             = self.on_update,
         on_regen_ipa          = self.on_regen_ipa,
         on_navigate_to_source = self.on_navigate_to_source,

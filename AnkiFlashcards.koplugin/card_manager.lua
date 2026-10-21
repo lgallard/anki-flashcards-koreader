@@ -32,10 +32,15 @@ local function close_for_replacement(viewer)
     if viewer then viewer._updating = true; UIManager:close(viewer) end
 end
 
+local function invalidate_card_content(session)
+    session.content_version = (session.content_version or 0) + 1
+    session.image_version = (session.image_version or 0) + 1
+end
+
 local function invalidate_viewer_session(session)
     session.open = false
     session.viewer = nil
-    session.image_version = (session.image_version or 0) + 1
+    invalidate_card_content(session)
 end
 
 local function begin_image_request(config, card, session, after_success, on_error)
@@ -44,9 +49,11 @@ local function begin_image_request(config, card, session, after_success, on_erro
     if not CardStorage.ensure_identity(card) then return false end
     session.image_version = (session.image_version or 0) + 1
     local version = session.image_version
+    local content_version = session.content_version or 0
     local storage_id = card._storage_id
     ImageGenerator.generate_async(config, card.image_prompt, card.phrase, function(image_path)
         if not session.open or session.image_version ~= version
+           or session.content_version ~= content_version
            or card._storage_id ~= storage_id then
             CardStorage.remove_image_if_unreferenced(image_path)
             return
@@ -55,7 +62,8 @@ local function begin_image_request(config, card, session, after_success, on_erro
             CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
-        if not session.open or session.image_version ~= version then
+        if not session.open or session.image_version ~= version
+           or session.content_version ~= content_version then
             CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
@@ -63,6 +71,35 @@ local function begin_image_request(config, card, session, after_success, on_erro
         if session.viewer then session.viewer = session.viewer:update(card) end
         if after_success then after_success() end
     end, on_error)
+    return true
+end
+
+local function apply_async_audio(card, session, audio_url, storage_id, content_version, word)
+    if not session.open or session.content_version ~= content_version
+       or card._storage_id ~= storage_id or card._ankivocab_word ~= word then
+        return false
+    end
+    if not CardStorage.update_audio_url(card, audio_url) then return false end
+    if not session.open or session.content_version ~= content_version
+       or card._storage_id ~= storage_id or card._ankivocab_word ~= word then
+        return false
+    end
+    card._audio_url = audio_url
+    return true
+end
+
+local function poll_pending_audio(config, card, session)
+    if card._audio_status ~= "pending"
+       or not card._ankivocab_word or card._ankivocab_word == "" then
+        return false
+    end
+    if not CardStorage.ensure_identity(card) then return false end
+    local storage_id = card._storage_id
+    local content_version = session.content_version or 0
+    local word = card._ankivocab_word
+    require("audio_generator").poll_ankivocab_async(config, word, function(audio_url)
+        apply_async_audio(card, session, audio_url, storage_id, content_version, word)
+    end, nil)
     return true
 end
 
@@ -498,7 +535,7 @@ function CardManager.show(base_config, filter_book, ui)
                        .. book .. "  (" .. (card.date or "") .. ")"
 
         local function open_viewer()
-            local session = { open = true, image_version = 0 }
+            local session = { open = true, image_version = 0, content_version = 0 }
             local function make_viewer(show_back)
                 local v
                 v = CardViewer:new {
@@ -527,8 +564,13 @@ function CardManager.show(base_config, filter_book, ui)
                         local event_name = ui.paging and "GotoPage" or "GotoXPointer"
                         ui:handleEvent(Event:new(event_name, card.highlight_pos0))
                     end or nil,
+                    on_prepare_update = function(editing_card)
+                        return CardStorage.ensure_identity(editing_card)
+                    end,
                     on_update = function(updated_card)
-                        return CardStorage.update_card(card, updated_card)
+                        local saved, save_err = CardStorage.update_card(card, updated_card)
+                        if saved then invalidate_card_content(session) end
+                        return saved, save_err
                     end,
                     on_regen_text = function()
                         local previous_show_back = true
@@ -557,6 +599,7 @@ function CardManager.show(base_config, filter_book, ui)
                                 end
                                 for key in pairs(card) do card[key] = nil end
                                 for key, value in pairs(candidate) do card[key] = value end
+                                invalidate_card_content(session)
                                 session.viewer = make_viewer(previous_show_back)
                                 -- Kick off image generation with new prompt.
                                 if new_prompt and ImageGenerator.images_enabled(base_config) then
@@ -629,6 +672,7 @@ function CardManager.show(base_config, filter_book, ui)
                and NetworkMgr:isOnline() then
                 begin_image_request(img_cfg, card, session, nil, nil)
             end
+            poll_pending_audio(base_config, card, session)
         end
 
         local function open_context_menu()

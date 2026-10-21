@@ -284,7 +284,9 @@ local function reset_main(card_results, options)
     image_callbacks, audio_callbacks, viewer_updates, shown_messages = {}, {}, {}, {}
     if options.saved_highlight_card then
         local saved = copy_card(options.saved_highlight_card)
-        saved._storage_id = saved._storage_id or "saved-highlight-1"
+        if not options.legacy_saved_card then
+            saved._storage_id = saved._storage_id or "saved-highlight-1"
+        end
         storage_cards[1] = saved
     end
     package.loaded["main"] = nil
@@ -390,7 +392,16 @@ local function reset_main(card_results, options)
                 events[#events + 1] = "update"
                 return true
             end,
-            ensure_identity = function(card) return card._storage_id ~= nil end,
+            ensure_identity = function(card)
+                if card._storage_id then return true end
+                if storage_cards[1] and storage_cards[1].phrase == card.phrase then
+                    next_id = next_id + 1
+                    card._storage_id = "legacy-" .. tostring(next_id)
+                    storage_cards[1]._storage_id = card._storage_id
+                    return true
+                end
+                return false
+            end,
             update_image_path = function(card, path)
                 if options.update_image_fails then return false end
                 if not storage_cards[1] or storage_cards[1]._storage_id ~= card._storage_id then return false end
@@ -461,6 +472,21 @@ viewers[#viewers].on_regenerate()
 assert(#storage_cards == 1 and storage_cards[1].phrase == "anchored", "regeneration must replace, not duplicate")
 assert(storage_cards[1].highlight_pos0 == "p0" and storage_cards[1].highlight_pos1 == "p1", "regeneration must retain highlight metadata")
 
+-- Owner callbacks capture a legacy record's identity before the viewer mutates
+-- its phrase, so update_card never has to discover the old phrase afterwards.
+local legacy_primary_action = reset_main({ { phrase = "legacy primary", definition = "first" } })
+legacy_primary_action.callback()
+local legacy_primary_viewer = viewers[#viewers]
+storage_cards[1]._storage_id, legacy_primary_viewer.card._storage_id = nil, nil
+assert(legacy_primary_viewer.on_prepare_update(legacy_primary_viewer.card),
+       "primary viewer must migrate legacy identity before editing")
+assert(legacy_primary_viewer.card.phrase == "legacy primary" and legacy_primary_viewer.card._storage_id,
+       "primary legacy migration must run while the original phrase is intact")
+legacy_primary_viewer.card.phrase = "renamed primary"
+assert(legacy_primary_viewer.on_update(legacy_primary_viewer.card), "primary legacy rename must persist")
+assert(#storage_cards == 1 and storage_cards[1].phrase == "renamed primary",
+       "primary legacy rename must not duplicate or lose the saved record")
+
 -- Existing document highlights use a separate viewer path. Its edits must target
 -- the saved generation, survive reopening the highlight, and persist its IPA
 -- refresh without redrawing a viewer that is no longer visible.
@@ -499,6 +525,17 @@ assert(highlight_viewer.on_highlight_dialog, "saved highlight navigation must re
 local reopened_viewer = open_saved_highlight(storage_cards[1])
 assert(reopened_viewer.card.definition == "persisted edit" and reopened_viewer.card.ipa == "/edited/",
        "reopened saved highlight must read the persisted edit and IPA")
+
+local legacy_highlight_viewer = open_saved_highlight({
+    phrase = "legacy highlight", definition = "original", highlight_pos0 = "legacy-p0", highlight_pos1 = "legacy-p1",
+}, { legacy_saved_card = true })
+assert(not legacy_highlight_viewer.card._storage_id, "legacy highlight setup must omit storage identity")
+assert(legacy_highlight_viewer.on_prepare_update(legacy_highlight_viewer.card),
+       "tapped-highlight viewer must migrate identity before editing")
+legacy_highlight_viewer.card.phrase = "renamed highlight"
+assert(legacy_highlight_viewer.on_update(legacy_highlight_viewer.card), "legacy tapped-highlight rename must persist")
+assert(#storage_cards == 1 and storage_cards[1].phrase == "renamed highlight",
+       "legacy tapped-highlight rename must not duplicate or lose the record")
 
 for _, failure in ipairs({ "write_failed", "already_saved" }) do
     local failing_viewer = open_saved_highlight(saved_highlight, {
@@ -545,6 +582,36 @@ assert(#viewer_updates == 1 and viewer_updates[1].viewer == replacement_viewer,
 assert(storage_cards[1].image_path == "/tmp/current.png"
        and storage_cards[1]._audio_url == "https://audio.example/current.mp3",
        "current callbacks must persist replacement media")
+
+-- A successful ordinary edit retains the generation but invalidates media work
+-- created for its old content. Audio also requires its original AnkiVocab word.
+local ordinary_edit_action = reset_main({ {
+    phrase = "anchor", definition = "first", image_prompt = "old image", _audio_status = "pending", _ankivocab_word = "anchor",
+} }, { images_enabled = true })
+ordinary_edit_action.callback()
+local ordinary_edit_viewer = viewers[#viewers]
+assert(#image_callbacks == 1 and #audio_callbacks == 1, "ordinary-edit setup must start image and audio callbacks")
+ordinary_edit_viewer.card.phrase = "edited"
+ordinary_edit_viewer.card._ankivocab_word = "edited"
+assert(ordinary_edit_viewer.on_update(ordinary_edit_viewer.card), "ordinary primary edit must persist")
+image_callbacks[1]("/tmp/ordinary-stale.png")
+audio_callbacks[1]("https://audio.example/ordinary-stale.mp3")
+assert(storage_cards[1].phrase == "edited" and not storage_cards[1].image_path and not storage_cards[1]._audio_url,
+       "ordinary primary edit must reject old image and audio callbacks")
+
+local tapped_media_viewer = open_saved_highlight({
+    phrase = "tap old", definition = "first", image_prompt = "old image", highlight_pos0 = "tap-p0", highlight_pos1 = "tap-p1",
+    _audio_status = "pending", _ankivocab_word = "tap old",
+}, { images_enabled = true })
+assert(#image_callbacks == 1 and #audio_callbacks == 1,
+       "tapped-highlight setup must start image and audio callbacks")
+tapped_media_viewer.card.phrase = "tap edited"
+tapped_media_viewer.card._ankivocab_word = "tap edited"
+assert(tapped_media_viewer.on_update(tapped_media_viewer.card), "ordinary tapped-highlight edit must persist")
+image_callbacks[1]("/tmp/tapped-stale.png")
+audio_callbacks[1]("https://audio.example/tapped-stale.mp3")
+assert(storage_cards[1].phrase == "tap edited" and not storage_cards[1].image_path and not storage_cards[1]._audio_url,
+       "ordinary tapped-highlight edit must reject old image and audio callbacks")
 
 -- A newer image request wins; stale output is deleted, and a dismissed viewer
 -- rejects output without reopening or persisting it.
@@ -730,6 +797,27 @@ assert(failing_card.phrase == "anchor" and failing_card.ipa == "/old/",
        "CardViewer must restore in-memory state after a failed persisted edit")
 assert(last_info_text == "A card with this phrase is already saved",
        "CardViewer must display the duplicate edit failure")
+
+local prepared_phrase, updated_phrase
+local identity_card = { phrase = "legacy anchor", definition = "original" }
+local identity_viewer = RealCardViewer:new {
+    card = identity_card,
+    show_back = true,
+    on_prepare_update = function(card)
+        prepared_phrase = card.phrase
+        card._storage_id = "migrated-before-mutation"
+        return true
+    end,
+    on_update = function(card)
+        updated_phrase = card.phrase
+        return card._storage_id == "migrated-before-mutation"
+    end,
+}
+viewer_input_value = "renamed legacy"
+identity_viewer:editField({ key = "phrase", label = "Phrase" })
+last_input_dialog.buttons[1][2].callback()
+assert(prepared_phrase == "legacy anchor" and updated_phrase == "renamed legacy",
+       "CardViewer must capture legacy identity before mutating phrase")
 
 local function read(path)
     local file = assert(io.open(path, "r"))

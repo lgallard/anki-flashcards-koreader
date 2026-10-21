@@ -177,18 +177,20 @@ local function can_generate_image(card, img_cfg)
     return has_prompt or is_ankivocab_card
 end
 
--- Async image work is tied to both a saved generation and one visible viewer
--- session. Only the latest request may persist or redraw; rejected callbacks
--- remove their generated local file so stale work cannot leave orphans.
+-- Async image work is tied to both a saved generation, one visible viewer
+-- session, and the card content that launched it. An ordinary edit can retain
+-- the viewer and storage id while making old media semantically stale.
 local function begin_image_request(config, card, session, after_success, on_error)
     -- Persist an identity before scheduling so callbacks never fall back to a
     -- mutable phrase when a legacy card is deleted and recreated.
     if not CardStorage.ensure_identity(card) then return false end
     session.image_version = (session.image_version or 0) + 1
     local version = session.image_version
+    local content_version = session.content_version or 0
     local storage_id = card._storage_id
     ImageGenerator.generate_async(config, card.image_prompt, card.phrase, function(image_path)
         if not session.open or session.image_version ~= version
+           or session.content_version ~= content_version
            or card._storage_id ~= storage_id then
             CardStorage.remove_image_if_unreferenced(image_path)
             return
@@ -199,7 +201,8 @@ local function begin_image_request(config, card, session, after_success, on_erro
         end
         -- on_close cannot interleave within this callback, but keep this guard
         -- explicit for future asynchronous storage implementations.
-        if not session.open or session.image_version ~= version then
+        if not session.open or session.image_version ~= version
+           or session.content_version ~= content_version then
             CardStorage.remove_image_if_unreferenced(image_path)
             return
         end
@@ -214,27 +217,45 @@ local function close_for_replacement(viewer)
     if viewer then viewer._updating = true; UIManager:close(viewer) end
 end
 
-local function invalidate_viewer_session(session)
-    session.open = false
-    session.viewer = nil
+local function invalidate_card_content(session)
+    session.content_version = (session.content_version or 0) + 1
+    -- Content changes also supersede any image request even when no replacement
+    -- image is started (for example, a phrase-only edit).
     session.image_version = (session.image_version or 0) + 1
 end
 
-local function apply_async_audio(card, audio_url)
+local function invalidate_viewer_session(session)
+    session.open = false
+    session.viewer = nil
+    invalidate_card_content(session)
+end
+
+local function apply_async_audio(card, session, audio_url, storage_id, content_version, word)
+    if not session.open or session.content_version ~= content_version
+       or card._storage_id ~= storage_id or card._ankivocab_word ~= word then
+        return false
+    end
     if not CardStorage.update_audio_url(card, audio_url) then return false end
+    if not session.open or session.content_version ~= content_version
+       or card._storage_id ~= storage_id or card._ankivocab_word ~= word then
+        return false
+    end
     card._audio_url = audio_url
     return true
 end
 
-local function poll_pending_audio(card)
+local function poll_pending_audio(card, session)
     if card._audio_status == "pending"
        and card._ankivocab_word and card._ankivocab_word ~= "" then
         if not CardStorage.ensure_identity(card) then return false end
+        local storage_id = card._storage_id
+        local content_version = session.content_version or 0
+        local word = card._ankivocab_word
         AudioGenerator.poll_ankivocab_async(
             CONFIGURATION,
-            card._ankivocab_word,
+            word,
             function(audio_url)
-                apply_async_audio(card, audio_url)
+                apply_async_audio(card, session, audio_url, storage_id, content_version, word)
             end,
             nil  -- audio polling errors are non-fatal
         )
@@ -483,7 +504,7 @@ function AnkiFlashcards:init()
                     -- the server-generated audio when sending to Anki.
 
                     -- viewer_ref[1] always holds the currently visible CardViewer.
-                    local session = { open = true, image_version = 0 }
+                    local session = { open = true, image_version = 0, content_version = 0 }
 
                     -- make_viewer creates a CardViewer for card c.
                     -- show_back=false → front (question) side.
@@ -502,8 +523,13 @@ function AnkiFlashcards:init()
                                 session.viewer = nv
                             end,
 
+                            on_prepare_update = function(editing_card)
+                                return CardStorage.ensure_identity(editing_card)
+                            end,
                             on_update = function(updated_card)
-                                return CardStorage.update_card(c, updated_card)
+                                local saved, save_err = CardStorage.update_card(c, updated_card)
+                                if saved then invalidate_card_content(session) end
+                                return saved, save_err
                             end,
 
                             on_send = function()
@@ -559,7 +585,7 @@ function AnkiFlashcards:init()
                                     if can_generate_image(new_card, new_img_config) then
                                         begin_image_request(new_img_config, new_card, session, nil, nil)
                                     end
-                                    poll_pending_audio(new_card)
+                                    poll_pending_audio(new_card, session)
                                 end)
                             end,
 
@@ -595,6 +621,7 @@ function AnkiFlashcards:init()
                                         end
                                         for key in pairs(c) do c[key] = nil end
                                         for key, value in pairs(candidate) do c[key] = value end
+                                        invalidate_card_content(session)
                                         session.viewer = make_viewer(c, previous_show_back)
                                         -- Kick off image generation with new prompt.
                                         if new_prompt and ImageGenerator.images_enabled(CONFIGURATION) then
@@ -652,7 +679,7 @@ function AnkiFlashcards:init()
                     end
 
                     -- Poll for AnkiVocab audio when generation returned pending.
-                    poll_pending_audio(card)
+                    poll_pending_audio(card, session)
                 end
 
                 NetworkMgr:runWhenOnline(function()
@@ -726,7 +753,7 @@ function AnkiFlashcards:init()
                                  or (ann.text and CardStorage.find_by_phrase_fuzzy(ann.text))
                     if card then
                         local hl_index = box.index
-                        local session = { open = true, image_version = 0 }
+                        local session = { open = true, image_version = 0, content_version = 0 }
                         local function make_viewer(show_back)
                             local v
                             v = CardViewer:new {
@@ -747,10 +774,15 @@ function AnkiFlashcards:init()
                                     end
                                     return ok, err
                                 end,
+                                on_prepare_update = function(editing_card)
+                                    return CardStorage.ensure_identity(editing_card)
+                                end,
                                 on_update = function(updated_card)
                                     -- Use the saved card's stable identity so editing a phrase
                                     -- cannot retarget a different same-phrase record.
-                                    return CardStorage.update_card(card, updated_card)
+                                    local saved, save_err = CardStorage.update_card(card, updated_card)
+                                    if saved then invalidate_card_content(session) end
+                                    return saved, save_err
                                 end,
                                 on_regen_ipa = function(new_phrase, updated_card, new_viewer)
                                     NetworkMgr:runWhenOnline(function()
@@ -826,6 +858,7 @@ function AnkiFlashcards:init()
                            and NetworkMgr:isOnline() then
                             begin_image_request(saved_img_cfg, card, session, nil, nil)
                         end
+                        poll_pending_audio(card, session)
                         return true
                     end
 
