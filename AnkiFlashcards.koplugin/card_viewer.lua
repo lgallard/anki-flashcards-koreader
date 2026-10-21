@@ -74,14 +74,15 @@ local CardViewer = InputContainer:extend {
     card           = nil,   -- card table: { phrase, ipa, definition, synonyms, text, source, image_path, … }
     show_back      = false, -- false = front (question), true = back (answer)
     on_show_answer = nil,   -- function() — called when user flips to back
-    on_save        = nil,   -- function() -> true | nil, err
     on_send        = nil,   -- function() -> true | nil, err
     on_regenerate  = nil,   -- function()
+    on_prepare_update = nil, -- function(card) -> true | false — capture durable identity before mutation
     on_update      = nil,   -- function(card) — called after a field edit (to persist)
     on_regen_ipa   = nil,   -- function(new_phrase, card, new_viewer) — async IPA regen after phrase change
     on_navigate_to_source = nil, -- function() — jump to highlight position in book
     on_regen_text  = nil,   -- function() — regenerate example sentence only
     on_regen_image = nil,   -- function() — regenerate image only
+    on_close       = nil,   -- function() — owner invalidates async work
     on_highlight_dialog = nil, -- function() — open KOReader's native highlight dialog (color, style, delete…)
     read_only      = false,
 
@@ -154,26 +155,6 @@ function CardViewer:init()
                 callback = function() self:showEditDialog() end,
             })
         end
-
-        local CardStorage   = require("card_storage")
-        local already_saved = self.card and CardStorage.is_saved(self.card.phrase or "")
-        table.insert(buttons_row, {
-            id      = "save",
-            text    = already_saved and _("✓ Saved") or _("★ Save"),
-            enabled = not already_saved,
-            callback = function()
-                if self.on_save then
-                    local ok, err = self.on_save()
-                    if ok then
-                        UIManager:show(Notification:new { text = _("Saved!") })
-                        local btn = self.button_table:getButtonById("save")
-                        if btn then btn:disable(); btn:refresh() end
-                    else
-                        UIManager:show(InfoMessage:new { text = err or _("Could not save"), timeout = 5 })
-                    end
-                end
-            end,
-        })
 
         table.insert(buttons_row, {
             text     = _("→ Anki"),
@@ -485,7 +466,21 @@ function CardViewer:editField(field_def)
                     -- Defer widget-tree changes until after the current
                     -- event cycle completes (avoids crash mid-callback).
                     UIManager:scheduleIn(0, function()
+                        local before = {}
+                        for k, v in pairs(self.card) do before[k] = v end
                         local old_phrase = self.card.phrase
+                        -- A phrase edit mutates this card table before on_update runs.
+                        -- Let the owner bind legacy records to a durable identity while
+                        -- the original phrase is still available for migration.
+                        if self.on_prepare_update then
+                            local prepared = self.on_prepare_update(self.card)
+                            if not prepared then
+                                UIManager:show(InfoMessage:new {
+                                    text = _("Could not save card changes"), timeout = 5,
+                                })
+                                return
+                            end
+                        end
                         self.card[field_def.key] = new_val
                         -- When phrase changes: auto-update Cambridge source URL,
                         -- clear stale IPA, then trigger async IPA regeneration.
@@ -496,7 +491,21 @@ function CardViewer:editField(field_def)
                             self.card.source = "https://dictionary.cambridge.org/dictionary/english/" .. slug
                             self.card.ipa    = ""
                         end
-                        if self.on_update then self.on_update(self.card) end
+                        local updated, update_err = true, nil
+                        if self.on_update then
+                            updated, update_err = self.on_update(self.card)
+                        end
+                        if not updated then
+                            for k in pairs(self.card) do self.card[k] = nil end
+                            for k, v in pairs(before) do self.card[k] = v end
+                            UIManager:show(InfoMessage:new {
+                                text = update_err == "already_saved"
+                                    and _("A card with this phrase is already saved")
+                                    or _("Could not save card changes"),
+                                timeout = 5,
+                            })
+                            return
+                        end
                         local new_v = self:update()
                         if phrase_changed and self.on_regen_ipa then
                             self.on_regen_ipa(new_val, self.card, new_v)
@@ -517,19 +526,21 @@ end
 function CardViewer:update(new_card, new_show_back)
     local card      = new_card or self.card
     local show_back = new_show_back ~= nil and new_show_back or self.show_back
+    self._updating = true
     UIManager:close(self)
     local updated = CardViewer:new {
         card                  = card,
         show_back             = show_back,
         on_show_answer        = self.on_show_answer,
-        on_save               = self.on_save,
         on_send               = self.on_send,
         on_regenerate         = self.on_regenerate,
+        on_prepare_update     = self.on_prepare_update,
         on_update             = self.on_update,
         on_regen_ipa          = self.on_regen_ipa,
         on_navigate_to_source = self.on_navigate_to_source,
         on_regen_text         = self.on_regen_text,
         on_regen_image        = self.on_regen_image,
+        on_close              = self.on_close,
         on_highlight_dialog   = self.on_highlight_dialog,
         read_only             = self.read_only,
     }
@@ -592,6 +603,7 @@ function CardViewer:onSwipe(arg, ges)
 end
 
 function CardViewer:onClose()
+    if not self._updating and self.on_close then self.on_close() end
     UIManager:close(self)
     return true
 end
