@@ -43,10 +43,49 @@ assert(CardStorage.update_image_path(regenerated, "/tmp/current.png"), "current 
 assert(CardStorage.load_cards()[1].image_path == "/tmp/current.png", "current async image was not persisted")
 os.remove("/tmp/anki_flashcards.json")
 
+-- save_raw must surface every failure after opening the file so callers can
+-- report a failed persistence operation instead of pretending it succeeded.
+local original_io_open = io.open
+local original_encode = package.loaded.json.encode
+local function fake_file(write_result, close_result)
+    return {
+        read = function() return "[]" end,
+        write = function() return write_result end,
+        close = function() return close_result end,
+    }
+end
+
+stored = { copy_card(regenerated) }
+io.open = function(_, mode)
+    if mode == "r" then return fake_file(true, true) end
+    return fake_file(false, true)
+end
+local saved, save_err = CardStorage.save_card { phrase = "write failure" }
+assert(not saved and save_err == "write_failed", "save_card must report write failure")
+stored = { copy_card(regenerated) }
+io.open = function(_, mode)
+    if mode == "r" then return fake_file(true, true) end
+    return fake_file(true, false)
+end
+local replaced, replace_err = CardStorage.replace_card(regenerated, { phrase = "close failure" })
+assert(not replaced and replace_err == "write_failed", "replace_card must report close failure")
+stored = { copy_card(regenerated) }
+package.loaded.json.encode = function() error("encode failure") end
+io.open = function(_, mode)
+    if mode == "r" then return fake_file(true, true) end
+    return fake_file(true, true)
+end
+assert(not CardStorage.update_image_path(regenerated, "/tmp/encode-failure.png"),
+       "async image update must report encoding failure")
+package.loaded.json.encode = original_encode
+io.open = original_io_open
+
 -- Load main.lua with KOReader dependencies mocked, then drive its highlight flow.
-local events, entries, viewers, generated_cards, storage_cards
-local function reset_main(card_results)
+local events, entries, viewers, generated_cards, storage_cards, image_callbacks, audio_callbacks, viewer_updates
+local function reset_main(card_results, options)
+    options = options or {}
     events, entries, viewers, generated_cards, storage_cards = {}, {}, {}, card_results, {}
+    image_callbacks, audio_callbacks, viewer_updates = {}, {}, {}
     package.loaded["main"] = nil
     for _, name in ipairs({
         "configuration", "device", "gettext", "ui/widget/infomessage", "ui/widget/notification",
@@ -87,6 +126,10 @@ local function reset_main(card_results)
     package.preload["card_viewer"] = function()
         return { new = function(_, options)
             options.is_viewer = true
+            options.update = function(self, updated_card)
+                viewer_updates[#viewer_updates + 1] = { viewer = self, card = updated_card }
+                return self
+            end
             events[#events + 1] = "viewer"
             return options
         end }
@@ -112,8 +155,16 @@ local function reset_main(card_results)
                 return true
             end,
             update_card = function() return true end,
-            update_image_path = function() return true end,
-            update_audio_url = function() return true end,
+            update_image_path = function(card, path)
+                if not storage_cards[1] or storage_cards[1]._storage_id ~= card._storage_id then return false end
+                storage_cards[1].image_path = path
+                return true
+            end,
+            update_audio_url = function(card, url)
+                if not storage_cards[1] or storage_cards[1]._storage_id ~= card._storage_id then return false end
+                storage_cards[1]._audio_url = url
+                return true
+            end,
             mark_sent = function() return true end,
             find_by_position = function() return nil end,
             find_by_phrase_fuzzy = function() return nil end,
@@ -125,9 +176,16 @@ local function reset_main(card_results)
     package.preload["card_sync"] = function() return { run_sync = function() end } end
     package.preload["highlight_inbox"] = function() return { show = function() end } end
     package.preload["image_generator"] = function()
-        return { images_enabled = function() return false end, generate_async = function() error("images disabled") end }
+        return {
+            images_enabled = function() return options.images_enabled or false end,
+            generate_async = function(_, _, _, on_success) image_callbacks[#image_callbacks + 1] = on_success end,
+        }
     end
-    package.preload["audio_generator"] = function() return {} end
+    package.preload["audio_generator"] = function()
+        return {
+            poll_ankivocab_async = function(_, _, on_success) audio_callbacks[#audio_callbacks + 1] = on_success end,
+        }
+    end
     local plugin = require("main")
     local highlight = {
         onTap = function() end,
@@ -153,6 +211,33 @@ assert(#storage_cards == 1 and storage_cards[1].book_title == "Book", "initial g
 viewers[#viewers].on_regenerate()
 assert(#storage_cards == 1 and storage_cards[1].phrase == "anchored", "regeneration must replace, not duplicate")
 assert(storage_cards[1].highlight_pos0 == "p0" and storage_cards[1].highlight_pos1 == "p1", "regeneration must retain highlight metadata")
+
+-- Late callbacks from the pre-regeneration generation must not mutate storage
+-- or redraw the replacement viewer. The replacement starts its own image and
+-- pending-audio work, and only its callbacks may update it.
+local pending_action = reset_main({
+    { phrase = "anchor", definition = "first", image_prompt = "first image", _audio_status = "pending", _ankivocab_word = "anchor" },
+    { phrase = "anchored", definition = "replacement", image_prompt = "replacement image", _audio_status = "pending", _ankivocab_word = "anchored" },
+}, { images_enabled = true })
+pending_action.callback()
+assert(#image_callbacks == 1 and #audio_callbacks == 1, "initial pending card must start image and audio work")
+viewers[#viewers].on_regenerate()
+assert(#image_callbacks == 2, "regenerated card must start replacement image work")
+assert(#audio_callbacks == 2, "regenerated pending card must start audio polling")
+local replacement_viewer = viewers[#viewers]
+image_callbacks[1]("/tmp/stale.png")
+audio_callbacks[1]("https://audio.example/stale.mp3")
+assert(#viewer_updates == 0 and viewers[#viewers] == replacement_viewer,
+       "stale callbacks must not redraw or replace the regenerated viewer")
+assert(storage_cards[1].phrase == "anchored" and not storage_cards[1].image_path and not storage_cards[1]._audio_url,
+       "stale callbacks must not persist into the regenerated card")
+image_callbacks[2]("/tmp/current.png")
+audio_callbacks[2]("https://audio.example/current.mp3")
+assert(#viewer_updates == 1 and viewer_updates[1].viewer == replacement_viewer,
+       "current image callback must update the current viewer")
+assert(storage_cards[1].image_path == "/tmp/current.png"
+       and storage_cards[1]._audio_url == "https://audio.example/current.mp3",
+       "current callbacks must persist replacement media")
 
 local failed_action = reset_main({ false })
 failed_action.callback()

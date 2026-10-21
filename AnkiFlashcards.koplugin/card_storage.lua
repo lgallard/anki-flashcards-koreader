@@ -66,9 +66,15 @@ local function save_raw(entries)
     local f = io.open(CARDS_FILE, "w")
     if not f then return false end
     local ok, encoded = pcall(json.encode, entries)
-    if not ok then f:close(); return false end
-    f:write(encoded)
-    f:close()
+    if not ok then
+        f:close()
+        return false
+    end
+    if not f:write(encoded) then
+        f:close()
+        return false
+    end
+    if not f:close() then return false end
     return true
 end
 

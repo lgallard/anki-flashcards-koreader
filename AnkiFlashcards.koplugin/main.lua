@@ -177,6 +177,39 @@ local function can_generate_image(card, img_cfg)
     return has_prompt or is_ankivocab_card
 end
 
+-- Async image/audio work is tied to a saved generation by _storage_id.
+-- Do not change the in-memory card or viewer unless the identity-aware storage
+-- update succeeded: a full regeneration gives the replacement a new identity,
+-- so a late callback for the previous generation becomes a no-op.
+local function apply_async_image(card, image_path, viewer_ref)
+    if not CardStorage.update_image_path(card, image_path) then return false end
+    card.image_path = image_path
+    if viewer_ref[1] then
+        viewer_ref[1] = viewer_ref[1]:update(card)
+    end
+    return true
+end
+
+local function apply_async_audio(card, audio_url)
+    if not CardStorage.update_audio_url(card, audio_url) then return false end
+    card._audio_url = audio_url
+    return true
+end
+
+local function poll_pending_audio(card)
+    if card._audio_status == "pending"
+       and card._ankivocab_word and card._ankivocab_word ~= "" then
+        AudioGenerator.poll_ankivocab_async(
+            CONFIGURATION,
+            card._ankivocab_word,
+            function(audio_url)
+                apply_async_audio(card, audio_url)
+            end,
+            nil  -- audio polling errors are non-fatal
+        )
+    end
+end
+
 -- ── Quick Lookup cache + popup (purple highlights) ──────────────────────────
 local quick_lookup_cache = {}
 
@@ -485,16 +518,12 @@ function AnkiFlashcards:init()
                                             new_card.image_prompt,
                                             new_card.phrase,
                                             function(img_path)
-                                                new_card.image_path = img_path
-                                                CardStorage.update_image_path(new_card, img_path)
-                                                if viewer_ref[1] then
-                                                    local nv2 = viewer_ref[1]:update(new_card)
-                                                    viewer_ref[1] = nv2
-                                                end
+                                                apply_async_image(new_card, img_path, viewer_ref)
                                             end,
                                             nil  -- image errors are non-fatal
                                         )
                                     end
+                                    poll_pending_audio(new_card)
                                 end)
                             end,
 
@@ -527,11 +556,7 @@ function AnkiFlashcards:init()
                                                 new_prompt,
                                                 c.phrase,
                                                 function(img_path)
-                                                    c.image_path = img_path
-                                                    CardStorage.update_image_path(c, img_path)
-                                                    if viewer_ref[1] then
-                                                        viewer_ref[1] = viewer_ref[1]:update(c)
-                                                    end
+                                                    apply_async_image(c, img_path, viewer_ref)
                                                 end,
                                                 nil
                                             )
@@ -558,20 +583,17 @@ function AnkiFlashcards:init()
                                     c.image_prompt,
                                     c.phrase,
                                     function(img_path)
-                                        -- Clean up old image file.
-                                        if old_image and old_image ~= "" then
-                                            os.remove(old_image)
+                                        if apply_async_image(c, img_path, viewer_ref) then
+                                            -- Clean up old image only after the replacement persisted.
+                                            if old_image and old_image ~= "" then
+                                                os.remove(old_image)
+                                            end
+                                            UIManager:setDirty(nil, "full")
+                                            UIManager:show(Notification:new {
+                                                text    = _("New image loaded!"),
+                                                timeout = 3,
+                                            })
                                         end
-                                        c.image_path = img_path
-                                        CardStorage.update_image_path(c, img_path)
-                                        if viewer_ref[1] then
-                                            viewer_ref[1] = viewer_ref[1]:update(c)
-                                        end
-                                        UIManager:setDirty(nil, "full")
-                                        UIManager:show(Notification:new {
-                                            text    = _("New image loaded!"),
-                                            timeout = 3,
-                                        })
                                     end,
                                     function(err)
                                         UIManager:show(InfoMessage:new {
@@ -599,32 +621,14 @@ function AnkiFlashcards:init()
                             card.image_prompt,
                             card.phrase,
                             function(img_path)
-                                card.image_path = img_path
-                                CardStorage.update_image_path(card, img_path)
-                                -- Refresh whichever side is showing.
-                                if viewer_ref[1] then
-                                    local nv = viewer_ref[1]:update(card)
-                                    viewer_ref[1] = nv
-                                end
+                                apply_async_image(card, img_path, viewer_ref)
                             end,
                             nil  -- image errors are non-fatal
                         )
                     end
 
-                    -- Poll for audio URL in background when AnkiVocab
-                    -- generated it asynchronously (audio_status = "pending").
-                    if card._audio_status == "pending"
-                       and card._ankivocab_word and card._ankivocab_word ~= "" then
-                        AudioGenerator.poll_ankivocab_async(
-                            CONFIGURATION,
-                            card._ankivocab_word,
-                            function(audio_url)
-                                card._audio_url = audio_url
-                                CardStorage.update_audio_url(card, audio_url)
-                            end,
-                            nil  -- audio polling errors are non-fatal
-                        )
-                    end
+                    -- Poll for AnkiVocab audio when generation returned pending.
+                    poll_pending_audio(card)
                 end
 
                 NetworkMgr:runWhenOnline(function()
@@ -733,18 +737,15 @@ function AnkiFlashcards:init()
                                         card.image_prompt,
                                         card.phrase,
                                         function(img_path)
-                                            if old_image and old_image ~= "" then
-                                                os.remove(old_image)
+                                            if apply_async_image(card, img_path, viewer_ref) then
+                                                if old_image and old_image ~= "" then
+                                                    os.remove(old_image)
+                                                end
+                                                UIManager:show(Notification:new {
+                                                    text    = _("New image loaded!"),
+                                                    timeout = 3,
+                                                })
                                             end
-                                            card.image_path = img_path
-                                            CardStorage.update_image_path(card, img_path)
-                                            if viewer_ref[1] then
-                                                viewer_ref[1] = viewer_ref[1]:update(card)
-                                            end
-                                            UIManager:show(Notification:new {
-                                                text    = _("New image loaded!"),
-                                                timeout = 3,
-                                            })
                                         end,
                                         function(err)
                                             UIManager:show(Notification:new {
@@ -772,11 +773,7 @@ function AnkiFlashcards:init()
                                 card.image_prompt,
                                 card.phrase,
                                 function(img_path)
-                                    card.image_path = img_path
-                                    CardStorage.update_image_path(card, img_path)
-                                    if viewer_ref[1] then
-                                        viewer_ref[1] = viewer_ref[1]:update(card)
-                                    end
+                                    apply_async_image(card, img_path, viewer_ref)
                                 end,
                                 nil  -- silent on error
                             )
