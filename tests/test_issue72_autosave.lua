@@ -25,7 +25,9 @@ os.remove("/tmp/anki_flashcards.json")
 local original = {
     phrase = "anchor", definition = "first", book_title = "Book",
     book_author = "Author", highlight_pos0 = "xpointer(/1)", highlight_pos1 = "xpointer(/2)",
+    image_path = "/tmp/issue72-replace-old.png",
 }
+local old_replace_asset = assert(io.open(original.image_path, "w")); old_replace_asset:write("old"); old_replace_asset:close()
 assert(CardStorage.save_card(original), "initial generated card must save")
 local old_id = original._storage_id
 CardStorage.mark_sent(original.phrase)
@@ -38,6 +40,8 @@ assert(cards[1].book_title == "Book" and cards[1].book_author == "Author", "book
 assert(cards[1].highlight_pos0 == "xpointer(/1)" and cards[1].highlight_pos1 == "xpointer(/2)", "highlight identity must survive regeneration")
 assert(cards[1].sent_to_anki, "sent-to-Anki state must survive regeneration")
 assert(regenerated._storage_id ~= old_id, "replacement must invalidate old async generation callbacks")
+assert(not io.open("/tmp/issue72-replace-old.png", "r"),
+       "full replacement must remove the old image only after persistence succeeds")
 assert(not CardStorage.update_image_path(original, "/tmp/stale.png"), "stale async image must not update replacement")
 assert(CardStorage.update_image_path(regenerated, "/tmp/current.png"), "current async image must update replacement")
 assert(CardStorage.load_cards()[1].image_path == "/tmp/current.png", "current async image was not persisted")
@@ -164,8 +168,9 @@ do
     end
     reset_valid()
     local legacy = { phrase = "legacy" }
-    assert(AtomicStorage.update_image_path(legacy, "/tmp/first.png"), "legacy callback must migrate identity")
-    assert(legacy._storage_id, "legacy in-memory card must receive its persisted identity")
+    assert(AtomicStorage.ensure_identity(legacy), "legacy card must migrate before async work is scheduled")
+    assert(legacy._storage_id, "legacy in-memory card must receive its eagerly persisted identity")
+    assert(AtomicStorage.update_image_path(legacy, "/tmp/first.png"), "legacy callback must use migrated identity")
     AtomicStorage.delete_card(1)
     local replacement = { phrase = "legacy", definition = "replacement" }
     assert(AtomicStorage.save_card(replacement), "replacement must save")
@@ -219,6 +224,11 @@ local function reset_main(card_results, options)
                 if result == false then return nil, "provider failed" end
                 return copy_card(result)
             end,
+            generate_text = function()
+                local result = options.text_results and table.remove(options.text_results, 1)
+                if result == false or not result then return nil, "sentence provider failed" end
+                return result.text, result.prompt
+            end,
         }
     end
     package.preload["card_viewer"] = function()
@@ -245,6 +255,7 @@ local function reset_main(card_results, options)
             end,
             replace_card = function(old, card)
                 assert(old._storage_id, "regeneration must target saved generation")
+                if options.replace_fails then return false, "write_failed" end
                 next_id = next_id + 1
                 card._storage_id = tostring(next_id)
                 card.sent_to_anki = old.sent_to_anki
@@ -252,7 +263,16 @@ local function reset_main(card_results, options)
                 events[#events + 1] = "replace"
                 return true
             end,
-            update_card = function() return true end,
+            update_card = function(old, candidate)
+                if options.update_card_fails then return false end
+                if storage_cards[1] then
+                    storage_cards[1].text = candidate.text
+                    storage_cards[1].image_prompt = candidate.image_prompt
+                end
+                candidate._storage_id = old._storage_id
+                return true
+            end,
+            ensure_identity = function(card) return card._storage_id ~= nil end,
             update_image_path = function(card, path)
                 if options.update_image_fails then return false end
                 if not storage_cards[1] or storage_cards[1]._storage_id ~= card._storage_id then return false end
@@ -389,6 +409,36 @@ os.remove(retained_old)
 local failed_action = reset_main({ false })
 failed_action.callback()
 assert(#storage_cards == 0 and #viewers == 0, "failed generation must not save or show a card")
+
+-- A generation or persistence failure after the viewer closes must restore the
+-- existing generated-card viewer. Sentence persistence failure must also leave
+-- the live card table untouched until the durable update succeeds.
+local full_failure = reset_main({ { phrase = "anchor", definition = "first" }, false })
+full_failure.callback()
+local original_full_viewer = viewers[#viewers]
+original_full_viewer.on_regenerate()
+assert(#viewers == 2 and viewers[#viewers].card.phrase == "anchor",
+       "failed full regeneration must restore the existing viewer")
+assert(storage_cards[1].phrase == "anchor", "failed full regeneration must retain stored card")
+
+local replace_failure = reset_main({ { phrase = "anchor", definition = "first" }, { phrase = "replacement" } },
+                                   { replace_fails = true })
+replace_failure.callback()
+local replace_failure_viewer = viewers[#viewers]
+replace_failure_viewer.on_regenerate()
+assert(#viewers == 2 and viewers[#viewers].card.phrase == "anchor",
+       "failed replacement persistence must restore the existing viewer")
+assert(storage_cards[1].phrase == "anchor", "failed replacement persistence must retain stored card")
+
+local sentence_failure = reset_main({ { phrase = "anchor", definition = "first", text = "old", image_prompt = "old prompt" } },
+                                   { text_results = { { text = "new", prompt = "new prompt" } }, update_card_fails = true })
+sentence_failure.callback()
+local original_sentence_viewer = viewers[#viewers]
+original_sentence_viewer.on_regen_text()
+assert(#viewers == 2 and viewers[#viewers].card.text == "old" and viewers[#viewers].card.image_prompt == "old prompt",
+       "failed sentence persistence must restore the existing viewer state")
+assert(storage_cards[1].text == "old" and storage_cards[1].image_prompt == "old prompt",
+       "failed sentence persistence must not mutate in-memory or stored card state")
 
 -- Exercise the real viewer's back-side action row with lightweight KOReader mocks.
 local rendered_buttons

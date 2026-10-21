@@ -229,7 +229,8 @@ package.preload["card_storage"] = function()
         end,
         clear_all = function() end,
         mark_sent = function() end,
-        delete_card = function() end,
+        ensure_identity = function() return true end,
+        delete_card_by_id = function() end,
         update_card = function() end,
         update_image_path = function() end,
     }

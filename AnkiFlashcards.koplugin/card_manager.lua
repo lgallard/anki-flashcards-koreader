@@ -39,6 +39,9 @@ local function invalidate_viewer_session(session)
 end
 
 local function begin_image_request(config, card, session, after_success, on_error)
+    -- Migrate legacy records before scheduling. Once a callback is in flight,
+    -- it must identify its generation only by this persisted id.
+    if not CardStorage.ensure_identity(card) then return false end
     session.image_version = (session.image_version or 0) + 1
     local version = session.image_version
     local storage_id = card._storage_id
@@ -60,6 +63,13 @@ local function begin_image_request(config, card, session, after_success, on_erro
         if session.viewer then session.viewer = session.viewer:update(card) end
         if after_success then after_success() end
     end, on_error)
+    return true
+end
+
+local function copy_card(card)
+    local copy = {}
+    for key, value in pairs(card) do copy[key] = value end
+    return copy
 end
 
 -- Handles both full CONFIGURATION (with nested .anki) and a flat Anki-only table.
@@ -522,6 +532,7 @@ function CardManager.show(base_config, filter_book, ui)
                         return CardStorage.update_card(card, updated_card)
                     end,
                     on_regen_text = function()
+                        local previous_show_back = true
                         close_for_replacement(session.viewer)
                         local loading_t = Notification:new {
                             text    = _("Regenerating sentence…"),
@@ -534,16 +545,20 @@ function CardManager.show(base_config, filter_book, ui)
                                 local new_text, new_prompt = CardGenerator.generate_text(base_config, card.phrase)
                                 if not new_text then
                                     notify_error(_("Regen failed: ") .. (new_prompt or "unknown"))
-                                    session.viewer = make_viewer(true)
+                                    session.viewer = make_viewer(previous_show_back)
                                     return
                                 end
-                                card.text         = new_text
-                                card.image_prompt = new_prompt
-                                if not CardStorage.update_card(card, card) then
+                                local candidate = copy_card(card)
+                                candidate.text = new_text
+                                candidate.image_prompt = new_prompt
+                                if not CardStorage.update_card(card, candidate) then
                                     notify_error(_("Could not save regenerated sentence"))
+                                    session.viewer = make_viewer(previous_show_back)
                                     return
                                 end
-                                session.viewer = make_viewer(true)
+                                for key in pairs(card) do card[key] = nil end
+                                for key, value in pairs(candidate) do card[key] = value end
+                                session.viewer = make_viewer(previous_show_back)
                                 -- Kick off image generation with new prompt.
                                 if new_prompt and ImageGenerator.images_enabled(base_config) then
                                     begin_image_request(base_config, card, session, nil, nil)
@@ -633,7 +648,13 @@ function CardManager.show(base_config, filter_book, ui)
                             text        = _("Delete '") .. (card.phrase or "") .. _("'?"),
                             ok_text     = _("Delete"),
                             ok_callback = function()
-                                local deleted = CardStorage.delete_card(idx)
+                                -- A filtered list ordinal is not the raw storage index.
+                                -- Migrate legacy records before deleting by durable id.
+                                if not CardStorage.ensure_identity(card) then
+                                    notify_error(_("Could not delete card: local persistence failed"))
+                                    return
+                                end
+                                local deleted = CardStorage.delete_card_by_id(card._storage_id)
                                 if deleted then
                                     refresh()
                                 else

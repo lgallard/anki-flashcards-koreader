@@ -181,6 +181,9 @@ end
 -- session. Only the latest request may persist or redraw; rejected callbacks
 -- remove their generated local file so stale work cannot leave orphans.
 local function begin_image_request(config, card, session, after_success, on_error)
+    -- Persist an identity before scheduling so callbacks never fall back to a
+    -- mutable phrase when a legacy card is deleted and recreated.
+    if not CardStorage.ensure_identity(card) then return false end
     session.image_version = (session.image_version or 0) + 1
     local version = session.image_version
     local storage_id = card._storage_id
@@ -204,6 +207,7 @@ local function begin_image_request(config, card, session, after_success, on_erro
         if session.viewer then session.viewer = session.viewer:update(card) end
         if after_success then after_success() end
     end, on_error)
+    return true
 end
 
 local function close_for_replacement(viewer)
@@ -225,6 +229,7 @@ end
 local function poll_pending_audio(card)
     if card._audio_status == "pending"
        and card._ankivocab_word and card._ankivocab_word ~= "" then
+        if not CardStorage.ensure_identity(card) then return false end
         AudioGenerator.poll_ankivocab_async(
             CONFIGURATION,
             card._ankivocab_word,
@@ -233,7 +238,15 @@ local function poll_pending_audio(card)
             end,
             nil  -- audio polling errors are non-fatal
         )
+        return true
     end
+    return false
+end
+
+local function copy_card(card)
+    local copy = {}
+    for key, value in pairs(card) do copy[key] = value end
+    return copy
 end
 
 -- ── Quick Lookup cache + popup (purple highlights) ──────────────────────────
@@ -502,6 +515,7 @@ function AnkiFlashcards:init()
                             end,
 
                             on_regenerate = function()
+                                local previous_show_back = show_back_flag or false
                                 close_for_replacement(session.viewer)
                                 local loading2 = Notification:new {
                                     text    = _("Regenerating…"),
@@ -518,6 +532,7 @@ function AnkiFlashcards:init()
                                             text    = _("Regenerate failed: ") .. (new_err or "unknown"),
                                             timeout = 5,
                                         })
+                                        session.viewer = make_viewer(c, previous_show_back)
                                         return
                                     end
                                     new_card.source         = cambridge_url(new_card.phrase)
@@ -531,6 +546,7 @@ function AnkiFlashcards:init()
                                             text    = _("Could not replace generated card: ") .. (replace_err or "unknown"),
                                             timeout = 5,
                                         })
+                                        session.viewer = make_viewer(c, previous_show_back)
                                         return
                                     end
                                     -- Regenerated card starts on front again.
@@ -546,6 +562,7 @@ function AnkiFlashcards:init()
                             end,
 
                             on_regen_text = function()
+                                local previous_show_back = show_back_flag or false
                                 close_for_replacement(session.viewer)
                                 local loading3 = Notification:new {
                                     text    = _("Regenerating sentence…"),
@@ -561,18 +578,22 @@ function AnkiFlashcards:init()
                                                 text    = _("Regen failed: ") .. (new_prompt or "unknown"),
                                                 timeout = 5,
                                             })
-                                            session.viewer = make_viewer(c, true)
+                                            session.viewer = make_viewer(c, previous_show_back)
                                             return
                                         end
-                                        c.text         = new_text
-                                        c.image_prompt = new_prompt
-                                        if not CardStorage.update_card(c, c) then
+                                        local candidate = copy_card(c)
+                                        candidate.text = new_text
+                                        candidate.image_prompt = new_prompt
+                                        if not CardStorage.update_card(c, candidate) then
                                             UIManager:show(InfoMessage:new {
                                                 text = _("Could not save regenerated sentence"), timeout = 5,
                                             })
+                                            session.viewer = make_viewer(c, previous_show_back)
                                             return
                                         end
-                                        session.viewer = make_viewer(c, true)
+                                        for key in pairs(c) do c[key] = nil end
+                                        for key, value in pairs(candidate) do c[key] = value end
+                                        session.viewer = make_viewer(c, previous_show_back)
                                         -- Kick off image generation with new prompt.
                                         if new_prompt and ImageGenerator.images_enabled(CONFIGURATION) then
                                             begin_image_request(CONFIGURATION, c, session, nil, nil)

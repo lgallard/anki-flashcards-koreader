@@ -147,6 +147,18 @@ local function ensure_entry_identity(entries, entry, target)
     return true
 end
 
+-- Bind a pre-identity record to a durable generation before scheduling async
+-- work. Phrase lookup is deliberately confined to this eager migration step;
+-- callbacks must already carry _storage_id.
+function CardStorage.ensure_identity(target)
+    if type(target) ~= "table" then return false end
+    if target._storage_id then return true end
+    local entries = load_raw()
+    local entry = find_entry(entries, target)
+    if not entry then return false end
+    return ensure_entry_identity(entries, entry, target)
+end
+
 -- Save a new card. Returns true on success or false + reason string.
 function CardStorage.save_card(card)
     local key     = normalize(card.phrase)
@@ -340,6 +352,7 @@ function CardStorage.replace_card(target, new_card)
 
     local sent_to_anki = e.sent_to_anki
     local date = e.date
+    local old_image_path = e.image_path
     e._storage_id     = new_storage_id(entries)
     e.phrase          = new_card.phrase          or ""
     e.ipa             = new_card.ipa             or ""
@@ -361,6 +374,11 @@ function CardStorage.replace_card(target, new_card)
     if not save_raw(entries) then return false, "write_failed" end
     new_card._storage_id = e._storage_id
     new_card.sent_to_anki = sent_to_anki
+    -- Persistence comes first. A failed asset cleanup must not roll back or
+    -- reintroduce a stale record; at worst it leaves an obsolete file.
+    if old_image_path and old_image_path ~= "" and old_image_path ~= e.image_path then
+        os.remove(old_image_path)
+    end
     return true
 end
 
@@ -378,6 +396,18 @@ function CardStorage.delete_card(idx)
         os.remove(card.image_path)
     end
     return true
+end
+
+-- Delete by stable identity, never by the position of a filtered display list.
+function CardStorage.delete_card_by_id(storage_id)
+    if not storage_id or storage_id == "" then return false, "not_saved" end
+    local entries = load_raw()
+    for idx, card in ipairs(entries) do
+        if card._storage_id == storage_id then
+            return CardStorage.delete_card(idx)
+        end
+    end
+    return false, "not_saved"
 end
 
 -- Empty the entire card list and delete all associated image files. Persist the

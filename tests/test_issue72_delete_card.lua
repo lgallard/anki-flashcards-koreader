@@ -95,7 +95,13 @@ end
 do
     local state
     local function setup(delete_result)
-        state = { shown = {}, closed = 0, delete_calls = 0, cards = { { phrase = "anchor" } } }
+        state = {
+            shown = {}, closed = 0, delete_calls = 0,
+            cards = {
+                { phrase = "other", book_title = "Other Book", _storage_id = "other-id" },
+                { phrase = "anchor", book_title = "Target Book", _storage_id = "anchor-id" },
+            },
+        }
         for _, name in ipairs({
             "card_manager", "gettext", "ui/widget/buttondialog", "ui/widget/confirmbox", "ui/widget/menu",
             "ui/widget/notification", "ui/widget/infomessage", "ui/uimanager", "ui/event", "card_storage",
@@ -120,7 +126,9 @@ do
             return {
                 load_anki_settings = function() return nil end,
                 load_cards = function() return state.cards end,
-                delete_card = function()
+                ensure_identity = function(card) return card._storage_id ~= nil end,
+                delete_card_by_id = function(storage_id)
+                    assert(storage_id == "anchor-id", "delete must use card storage identity")
                     state.delete_calls = state.delete_calls + 1
                     return delete_result
                 end,
@@ -138,7 +146,7 @@ do
         return require("card_manager")
     end
     local function start_delete(manager)
-        manager.show({})
+        manager.show({}, "Target Book")
         local list = state.shown[#state.shown]
         list.item_table[2].hold_callback()
         local actions = state.shown[#state.shown]
@@ -149,7 +157,7 @@ do
     local function count_card_menus()
         local count = 0
         for _, widget in ipairs(state.shown) do
-            if widget.title == "My Cards (1 card)" then count = count + 1 end
+            if widget.title == "My Cards (1 card (filtered))" then count = count + 1 end
         end
         return count
     end
@@ -164,8 +172,65 @@ do
     start_delete(setup(true))
     assert(state.delete_calls == 1, "successful delete must call storage once")
     assert(count_card_menus() == 2, "successful delete must refresh the card list")
-    assert(state.shown[#state.shown].title == "My Cards (1 card)",
-           "successful delete must end on the refreshed card list")
+    assert(state.shown[#state.shown].title == "My Cards (1 card (filtered))",
+           "successful delete must end on the refreshed filtered card list")
+end
+
+-- A saved-card viewer must reopen after sentence persistence fails, and the
+-- unsaved candidate must not leak into the in-memory card it displays.
+do
+    local shown, viewer_options = {}, nil
+    for _, name in ipairs({
+        "card_manager", "gettext", "ui/widget/buttondialog", "ui/widget/confirmbox", "ui/widget/menu",
+        "ui/widget/notification", "ui/widget/infomessage", "ui/uimanager", "ui/event", "card_storage",
+        "anki_sync", "card_generator", "card_viewer", "image_generator", "ui/network/manager", "settings_viewer",
+    }) do package.loaded[name] = nil end
+    package.preload["gettext"] = function() return function(s) return s end end
+    for _, name in ipairs({ "ui/widget/buttondialog", "ui/widget/confirmbox", "ui/widget/menu",
+                            "ui/widget/notification", "ui/widget/infomessage" }) do
+        package.preload[name] = function() return { new = function(_, options) return options end } end
+    end
+    package.preload["ui/uimanager"] = function()
+        return {
+            show = function(_, widget) shown[#shown + 1] = widget end,
+            close = function() end, setDirty = function() end,
+            scheduleIn = function(_, _, callback) callback() end,
+            topdown_widgets_iter = function() return function() return nil end end,
+        }
+    end
+    package.preload["ui/event"] = function() return {} end
+    local card = { phrase = "anchor", text = "old text", image_prompt = "old prompt", _storage_id = "saved-id" }
+    package.preload["card_storage"] = function()
+        return {
+            load_anki_settings = function() return nil end,
+            load_cards = function() return { card } end,
+            ensure_identity = function(target) return target._storage_id == "saved-id" end,
+            update_card = function() return false end,
+            mark_sent = function() return true end,
+        }
+    end
+    package.preload["anki_sync"] = function() return { send_card = function() return true end } end
+    package.preload["card_generator"] = function()
+        return { generate_text = function() return "new text", "new prompt" end }
+    end
+    package.preload["card_viewer"] = function()
+        return { new = function(_, options) viewer_options = options; return options end }
+    end
+    package.preload["image_generator"] = function() return { images_enabled = function() return false end } end
+    package.preload["ui/network/manager"] = function()
+        return { runWhenOnline = function(_, callback) callback() end, isOnline = function() return true end }
+    end
+    package.preload["settings_viewer"] = function() return { show = function() end } end
+    local manager = require("card_manager")
+    manager.show({})
+    shown[#shown].item_table[2].callback()
+    local initial_viewer = viewer_options
+    initial_viewer.on_regen_text()
+    assert(viewer_options ~= initial_viewer and viewer_options.card.text == "old text"
+           and viewer_options.card.image_prompt == "old prompt",
+           "saved-card sentence save failure must restore the original viewer state")
+    assert(card.text == "old text" and card.image_prompt == "old prompt",
+           "saved-card sentence save failure must not mutate the live card")
 end
 
 print("issue #72 delete-card harness: PASS")
