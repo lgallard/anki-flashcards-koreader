@@ -440,6 +440,41 @@ function CardStorage.delete_card_by_id(storage_id)
     return false, "not_saved"
 end
 
+-- Delete cards belonging to one exact book group. `include_missing` is kept
+-- separate from the title so an untitled card group can never be confused with
+-- a real book whose title is the localized "Unknown book" label. Persist the
+-- retained records before cleaning media; shared images are removed only after
+-- no persisted card refers to them.
+function CardStorage.delete_cards_for_book(book_title, include_missing)
+    if not include_missing and type(book_title) ~= "string" then
+        return false, "invalid_book"
+    end
+
+    local entries = load_raw()
+    local retained, removed_images, removed_count = {}, {}, 0
+    for _, card in ipairs(entries) do
+        local belongs_to_book = include_missing
+            and (not card.book_title or card.book_title == "")
+            or (not include_missing and card.book_title == book_title)
+        if belongs_to_book then
+            removed_count = removed_count + 1
+            if card.image_path and card.image_path ~= "" then
+                table.insert(removed_images, card.image_path)
+            end
+        else
+            table.insert(retained, card)
+        end
+    end
+
+    if removed_count == 0 then return true, 0 end
+    if not save_raw(retained) then return false, "write_failed" end
+
+    for _, image_path in ipairs(removed_images) do
+        CardStorage.remove_image_if_unreferenced(image_path)
+    end
+    return true, removed_count
+end
+
 -- Empty the entire card list and delete all associated image files. Persist the
 -- empty list first so a write failure leaves every saved record and asset intact.
 function CardStorage.clear_all()

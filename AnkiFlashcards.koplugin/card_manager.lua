@@ -19,6 +19,9 @@ local SettingsViewer = require("settings_viewer")
 local InfoMessage   = require("ui/widget/infomessage")
 
 local CardManager = {}
+-- This is an internal key, not a display label. A localized "Unknown book"
+-- title is therefore always distinct from cards with missing book metadata.
+local MISSING_BOOK = {}
 
 local function notify(text)
     UIManager:show(Notification:new { text = text })
@@ -26,6 +29,18 @@ end
 
 local function notify_error(text)
     UIManager:show(InfoMessage:new { text = text, timeout = 5 })
+end
+
+local function cards_for_book(cards, book_key)
+    local filtered = {}
+    local is_missing_book = book_key == MISSING_BOOK
+    for _, card in ipairs(cards) do
+        if (is_missing_book and (not card.book_title or card.book_title == ""))
+           or (not is_missing_book and card.book_title == book_key) then
+            table.insert(filtered, card)
+        end
+    end
+    return filtered
 end
 
 local function close_for_replacement(viewer)
@@ -163,14 +178,18 @@ local function show_stats()
     local book_order = {}
     local book_stats = {}
     for _i, card in ipairs(all_cards) do
-        local title = (card.book_title and card.book_title ~= "")
-                      and card.book_title or _("Unknown book")
-        if not book_stats[title] then
-            book_stats[title] = { total = 0, sent = 0 }
-            table.insert(book_order, title)
+        local book_key = (card.book_title and card.book_title ~= "")
+                         and card.book_title or MISSING_BOOK
+        if not book_stats[book_key] then
+            book_stats[book_key] = {
+                total = 0,
+                sent = 0,
+                label = book_key == MISSING_BOOK and _("Unknown book") or book_key,
+            }
+            table.insert(book_order, book_key)
         end
-        book_stats[title].total = book_stats[title].total + 1
-        if card.sent_to_anki then book_stats[title].sent = book_stats[title].sent + 1 end
+        book_stats[book_key].total = book_stats[book_key].total + 1
+        if card.sent_to_anki then book_stats[book_key].sent = book_stats[book_key].sent + 1 end
     end
 
     local total_all, sent_all = #all_cards, 0
@@ -178,20 +197,75 @@ local function show_stats()
         if card.sent_to_anki then sent_all = sent_all + 1 end
     end
 
+    local stats_menu
+    local function refresh_stats()
+        if stats_menu then UIManager:close(stats_menu) end
+        show_stats()
+    end
+    local function delete_book(book_key, label)
+        local current_cards = cards_for_book(CardStorage.load_cards(), book_key)
+        if #current_cards == 0 then
+            notify(_("No cards for this book"))
+            refresh_stats()
+            return
+        end
+        UIManager:show(ConfirmBox:new {
+            text = _("Delete all ") .. tostring(#current_cards)
+                   .. (#current_cards == 1 and _(" local card for '") or _(" local cards for '"))
+                   .. label .. _("'? This cannot be undone. Cards already sent to Anki will not be deleted from Anki."),
+            ok_text = _("Delete all cards for this book"),
+            cancel_callback = function() end,
+            ok_callback = function()
+                local deleted, count_or_err = CardStorage.delete_cards_for_book(
+                    book_key == MISSING_BOOK and nil or book_key,
+                    book_key == MISSING_BOOK)
+                if not deleted then
+                    notify_error(_("Could not delete cards: local persistence failed"))
+                    return
+                end
+                if count_or_err == 0 then
+                    notify(_("No cards for this book"))
+                else
+                    notify(_("Deleted ") .. tostring(count_or_err)
+                           .. (count_or_err == 1 and _(" local card for '") or _(" local cards for '"))
+                           .. label .. _("'"))
+                end
+                refresh_stats()
+            end,
+        })
+    end
+
     local stat_items = {}
     if #book_order == 0 then
         table.insert(stat_items, { text = _("(no cards yet)") })
     end
-    for _i, title in ipairs(book_order) do
-        local s      = book_stats[title]
+    for _i, book_key in ipairs(book_order) do
+        local s      = book_stats[book_key]
         local unsent = s.total - s.sent
-        local line   = title .. "  —  " .. tostring(s.total)
+        local line   = s.label .. "  —  " .. tostring(s.total)
                        .. (s.total == 1 and _(" card") or _(" cards"))
                        .. "  +" .. tostring(s.sent) .. " sent"
         if unsent > 0 then
             line = line .. "  -" .. tostring(unsent) .. " unsent"
         end
-        table.insert(stat_items, { text = line })
+        local selected_key, selected_label = book_key, s.label
+        table.insert(stat_items, {
+            text = line,
+            hold_callback = function()
+                local actions
+                actions = ButtonDialog:new {
+                    title = selected_label,
+                    buttons = {
+                        {{ text = _("Delete all cards for this book"), callback = function()
+                            UIManager:close(actions)
+                            delete_book(selected_key, selected_label)
+                        end }},
+                        {{ text = _("Cancel"), callback = function() UIManager:close(actions) end }},
+                    },
+                }
+                UIManager:show(actions)
+            end,
+        })
     end
 
     local title_str = _("Stats — ")
@@ -199,24 +273,17 @@ local function show_stats()
                       .. (total_all == 1 and _(" card") or _(" cards"))
                       .. "  +" .. tostring(sent_all) .. " sent"
                       .. "  -" .. tostring(total_all - sent_all) .. " unsent"
-    UIManager:show(Menu:new { title = title_str, item_table = stat_items })
+    stats_menu = Menu:new {
+        title = title_str,
+        item_table = stat_items,
+        onMenuHold = function(_, item)
+            if item and item.hold_callback then item.hold_callback() end
+        end,
+    }
+    UIManager:show(stats_menu)
 end
 
 -- ── Card export ─────────────────────────────────────────────────────────────
-
-local MISSING_BOOK = {}
-
-local function cards_for_book(cards, book_key)
-    local filtered = {}
-    local is_missing_book = book_key == MISSING_BOOK
-    for _, card in ipairs(cards) do
-        if (is_missing_book and (not card.book_title or card.book_title == ""))
-           or (not is_missing_book and card.book_title == book_key) then
-            table.insert(filtered, card)
-        end
-    end
-    return filtered
-end
 
 local function current_book_title(opts)
     local document = opts and opts.ui and opts.ui.document
