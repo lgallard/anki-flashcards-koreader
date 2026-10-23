@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/lgallard/anki-flashcards-koreader/compare/v1.3.0...v1.4.0) (2026-10-23)
+
+
+### Features
+
+* bulk delete cards by book ([ff68843](https://github.com/lgallard/anki-flashcards-koreader/commit/ff68843b86bc5dbb57dcae4c1d663bd2b575936d))
+* bulk delete local cards by book ([3ecba2e](https://github.com/lgallard/anki-flashcards-koreader/commit/3ecba2e6cf009736492bccd3766a1429560a88b1))
+
 ## [1.3.0](https://github.com/lgallard/anki-flashcards-koreader/compare/v1.2.0...v1.3.0) (2026-10-21)
 
 
